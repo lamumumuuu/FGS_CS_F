@@ -1,0 +1,176 @@
+import { Task } from "@/types/task";
+
+export const mockTasks: Task[] = [
+  {
+    id: "1",
+    title: "修复官网首页加载缓慢问题",
+    description:
+      "官网首页加载时间超过5秒，需要优化图片资源加载、代码分割和缓存策略，提升用户体验。需要对首页进行全面性能分析，找出瓶颈并逐一解决。",
+    difficulty: "黄金",
+    status: "等待中",
+    reward: 500,
+    deadline: "2026-08-15",
+    publisher: {
+      id: "p1",
+      name: "宗门长老",
+      avatar: "",
+    },
+    createdAt: "2026-07-18",
+    techRequirements: ["Next.js", "性能优化", "图片压缩", "代码分割"],
+  },
+  {
+    id: "2",
+    title: "开发会员签到功能",
+    description:
+      "实现每日签到系统，用户签到可获得灵石奖励，连续签到有额外加成。需要签到日历、积分记录、奖励发放等完整功能。",
+    difficulty: "白银",
+    status: "讨伐中",
+    reward: 300,
+    deadline: "2026-08-10",
+    publisher: {
+      id: "p2",
+      name: "事务堂主",
+      avatar: "",
+    },
+    createdAt: "2026-07-15",
+    techRequirements: ["React", "TypeScript", "数据库设计"],
+    completer: {
+      id: "c1",
+      name: "修仙者小王",
+      avatar: "",
+    },
+  },
+  {
+    id: "3",
+    title: "设计新的协会Logo",
+    description: "为协会设计一个全新的logo，要求体现计算机与修仙元素的融合，具有现代感和辨识度。需要提供多种方案供选择。",
+    difficulty: "青铜",
+    status: "已完成",
+    reward: 150,
+    deadline: "2026-07-20",
+    publisher: {
+      id: "p3",
+      name: "宣传大使",
+      avatar: "",
+    },
+    createdAt: "2026-07-10",
+    techRequirements: ["UI设计", "Photoshop", "Figma"],
+    completer: {
+      id: "c2",
+      name: "画师小李",
+      avatar: "",
+    },
+  },
+  {
+    id: "4",
+    title: "搭建协会内部论坛",
+    description:
+      "搭建一个供协会成员交流的内部论坛系统，支持发帖、回帖、点赞、私信等功能。需要考虑用户权限管理和内容审核机制。",
+    difficulty: "黄金",
+    status: "审核中",
+    reward: 800,
+    deadline: "2026-09-01",
+    publisher: {
+      id: "p4",
+      name: "协会会长",
+      avatar: "",
+    },
+    createdAt: "2026-07-19",
+    techRequirements: ["全栈开发", "数据库", "鉴权系统"],
+  },
+  {
+    id: "5",
+    title: "编写Python入门教程",
+    description:
+      "为新成员编写一套Python入门教程，包含基础语法、常用库、实战项目等内容，要求通俗易懂，配有代码示例和练习题。",
+    difficulty: "黑铁",
+    status: "等待中",
+    reward: 80,
+    deadline: "2026-08-30",
+    publisher: {
+      id: "p5",
+      name: "教学部长",
+      avatar: "",
+    },
+    createdAt: "2026-07-17",
+    techRequirements: ["Python", "文档编写"],
+  },
+  {
+    id: "6",
+    title: "移动端适配优化",
+    description:
+      "对官网进行移动端适配优化，确保在手机和平板上都有良好的显示效果和交互体验。需要处理响应式布局、触摸交互等问题。",
+    difficulty: "白银",
+    status: "讨伐中",
+    reward: 250,
+    deadline: "2026-08-05",
+    publisher: {
+      id: "p6",
+      name: "技术总监",
+      avatar: "",
+    },
+    createdAt: "2026-07-12",
+    techRequirements: ["响应式设计", "CSS", "移动端调试"],
+    completer: {
+      id: "c3",
+      name: "前端达人",
+      avatar: "",
+    },
+  },
+  {
+    id: "7",
+    title: "数据库备份自动化脚本",
+    description:
+      "编写自动化数据库备份脚本，支持定时备份、异地存储、备份校验和快速恢复功能。确保数据安全性和可恢复性。",
+    difficulty: "青铜",
+    status: "等待中",
+    reward: 120,
+    deadline: "2026-07-30",
+    publisher: {
+      id: "p7",
+      name: "运维长老",
+      avatar: "",
+    },
+    createdAt: "2026-07-16",
+    techRequirements: ["Shell脚本", "数据库", "Linux"],
+  },
+  {
+    id: "8",
+    title: "开发灵石交易系统",
+    description:
+      "开发一套完整的灵石交易系统，支持用户间转账、任务报酬发放、消费记录查询、余额提醒等功能。需要确保交易安全和数据一致性。",
+    difficulty: "黄金",
+    status: "审核中",
+    reward: 1000,
+    deadline: "2026-09-15",
+    publisher: {
+      id: "p8",
+      name: "财务总管",
+      avatar: "",
+    },
+    createdAt: "2026-07-20",
+    techRequirements: ["全栈开发", "支付系统", "安全加密"],
+  },
+  {
+    id: "9",
+    title: "整理协会历史档案",
+    description:
+      "将协会历年的活动资料、项目文档、成员信息等整理归档，建立电子档案库，方便检索和查阅。需要对历史资料进行数字化处理。",
+    difficulty: "黑铁",
+    status: "已完成",
+    reward: 50,
+    deadline: "2026-07-10",
+    publisher: {
+      id: "p9",
+      name: "档案管理员",
+      avatar: "",
+    },
+    createdAt: "2026-06-20",
+    techRequirements: ["文档整理", "数据录入"],
+    completer: {
+      id: "c4",
+      name: "勤劳小蜜蜂",
+      avatar: "",
+    },
+  },
+];

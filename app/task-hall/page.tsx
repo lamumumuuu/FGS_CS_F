@@ -35,21 +35,28 @@ export default function TaskHall() {
     keyword: "",
   });
 
+  // 将 loadTasks 的逻辑直接写进 useEffect
   useEffect(() => {
-    loadTasks();
-  }, [filters]);
+    let ignore = false; // 防止组件卸载后更新状态
 
-  async function loadTasks() {
-    setLoading(true);
-    try {
-      const data = await taskApi.getTasks(filters);
-      setTasks(data);
-    } catch (error) {
-      console.error("Failed to load tasks:", error);
-    } finally {
-      setLoading(false);
+    async function fetchTasks() {
+      setLoading(true);
+      try {
+        const data = await taskApi.getTasks(filters);
+        if (!ignore) setTasks(data);
+      } catch (error) {
+        console.error("Failed to load tasks:", error);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
     }
-  }
+
+    fetchTasks();
+
+    return () => {
+      ignore = true;
+    };
+  }, [filters]); // 当 filters 变化时重新请求
 
   async function handleTaskClick(taskId: string) {
     try {

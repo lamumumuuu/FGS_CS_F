@@ -6,7 +6,6 @@ import {
   PeakInfo,
   CurrentUser,
   SectPeak,
-  SectRole,
   ContextMenuItem,
 } from "@/types/sect";
 import { sectApi } from "@/app/api/client";
@@ -57,48 +56,58 @@ export default function SectAffairs() {
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  useEffect(() => {
-    loadInitialData();
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  async function loadInitialData() {
-    setLoading(true);
-    try {
-      const [user, peaksData, managementData] = await Promise.all([
-        sectApi.getCurrentUser(),
-        sectApi.getAllPeaks(),
-        sectApi.getManagementDisciples(),
-      ]);
-      setCurrentUser(user);
-      setPeaks(peaksData);
-      setManagementDisciples(managementData);
-    } catch (error) {
-      console.error("Failed to load data:", error);
-      showToast("数据加载失败", "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  // 初始数据加载
   useEffect(() => {
-    if (viewMode === "roster") {
-      loadDisciples();
-    }
-  }, [viewMode, searchKeyword, filterPeak]);
-
-  async function loadDisciples() {
-    try {
-      let data: Disciple[];
-      if (searchKeyword) {
-        data = await sectApi.searchDisciples(searchKeyword);
-      } else {
-        data = await sectApi.filterDisciplesByPeak(filterPeak);
+    let ignore = false;
+    async function fetchInitialData() {
+      setLoading(true);
+      try {
+        const [user, peaksData, managementData] = await Promise.all([
+          sectApi.getCurrentUser(),
+          sectApi.getAllPeaks(),
+          sectApi.getManagementDisciples(),
+        ]);
+        if (!ignore) {
+          setCurrentUser(user);
+          setPeaks(peaksData);
+          setManagementDisciples(managementData);
+        }
+      } catch (error) {
+        console.error("Failed to load data:", error);
+        if (!ignore) showToast("数据加载失败", "error");
+      } finally {
+        if (!ignore) setLoading(false);
       }
-      setAllDisciples(data);
-    } catch (error) {
-      console.error("Failed to load disciples:", error);
     }
-  }
+    fetchInitialData();
+    return () => { ignore = true; };
+  }, [showToast]);
+
+  // 弟子列表加载（切换模式或搜索条件变化时）
+  useEffect(() => {
+    if (viewMode !== "roster") return;
+    let ignore = false;
+    async function fetchDisciples() {
+      try {
+        let data: Disciple[];
+        if (searchKeyword) {
+          data = await sectApi.searchDisciples(searchKeyword);
+        } else {
+          data = await sectApi.filterDisciplesByPeak(filterPeak);
+        }
+        if (!ignore) setAllDisciples(data);
+      } catch (error) {
+        console.error("Failed to load disciples:", error);
+      }
+    }
+    fetchDisciples();
+    return () => { ignore = true; };
+  }, [viewMode, searchKeyword, filterPeak]);
 
   async function handlePeakClick(peakName: SectPeak) {
     if (expandedPeak === peakName) {
@@ -150,14 +159,22 @@ export default function SectAffairs() {
       const success = await sectApi.deleteDisciple(disciple.id);
       if (success) {
         showToast(`已删除弟子 ${disciple.name}`, "success");
-        loadInitialData();
-        if (viewMode === "roster") loadDisciples();
+        setLoading(true);
+        const [user, peaksData, managementData] = await Promise.all([
+          sectApi.getCurrentUser(),
+          sectApi.getAllPeaks(),
+          sectApi.getManagementDisciples(),
+        ]);
+        setCurrentUser(user);
+        setPeaks(peaksData);
+        setManagementDisciples(managementData);
+        setLoading(false);
         if (expandedPeak) {
           const members = await sectApi.getDisciplesByPeak(expandedPeak);
           setPeakMembers(members);
         }
       }
-    } catch (error) {
+    } catch {
       showToast("删除失败", "error");
     } finally {
       setActionLoading(false);
@@ -173,7 +190,7 @@ export default function SectAffairs() {
         showToast(`已打赏 ${selectedDisciple.name} ${rewardAmount} 灵石`, "success");
         setShowRewardModal(false);
       }
-    } catch (error) {
+    } catch {
       showToast("打赏失败", "error");
     } finally {
       setActionLoading(false);
@@ -188,14 +205,22 @@ export default function SectAffairs() {
       if (success) {
         showToast(`已将 ${selectedDisciple.name} 移至 ${moveTargetPeak}`, "success");
         setShowMoveModal(false);
-        loadInitialData();
-        if (viewMode === "roster") loadDisciples();
+        setLoading(true);
+        const [user, peaksData, managementData] = await Promise.all([
+          sectApi.getCurrentUser(),
+          sectApi.getAllPeaks(),
+          sectApi.getManagementDisciples(),
+        ]);
+        setCurrentUser(user);
+        setPeaks(peaksData);
+        setManagementDisciples(managementData);
+        setLoading(false);
         if (expandedPeak) {
           const members = await sectApi.getDisciplesByPeak(expandedPeak);
           setPeakMembers(members);
         }
       }
-    } catch (error) {
+    } catch {
       showToast("移动失败", "error");
     } finally {
       setActionLoading(false);
@@ -207,13 +232,8 @@ export default function SectAffairs() {
     setShowWipModal(true);
   }
 
-  const showToast = useCallback((message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
-
   const hasPermission = (permission: string) => {
-    return currentUser?.permissions.includes(permission as any) ?? false;
+    return (currentUser?.permissions as string[])?.includes(permission) ?? false;
   };
 
   if (loading) {

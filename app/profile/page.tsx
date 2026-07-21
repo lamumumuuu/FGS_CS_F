@@ -13,19 +13,25 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState<TabType>("journey");
 
   useEffect(() => {
-    loadUser();
-  }, []);
+    let ignore = false; // 用于防止组件卸载后 setState
 
-  async function loadUser() {
-    try {
-      const currentUser = await userApi.getCurrentUser();
-      setUser(currentUser);
-    } catch (error) {
-      console.error("Failed to load user:", error);
-    } finally {
-      setLoading(false);
+    async function loadUser() {
+      try {
+        const currentUser = await userApi.getCurrentUser();
+        if (!ignore) setUser(currentUser);
+      } catch (error) {
+        console.error("Failed to load user:", error);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
     }
-  }
+
+    loadUser();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -89,19 +95,21 @@ export default function Profile() {
           <div className="flex border-b border-amber-50">
             <button
               onClick={() => setActiveTab("journey")}
-              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${activeTab === "journey"
-                ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50/50"
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                }`}
+              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${
+                activeTab === "journey"
+                  ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50/50"
+                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              }`}
             >
               🗺️ 我的征途
             </button>
             <button
               onClick={() => setActiveTab("published")}
-              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${activeTab === "published"
-                ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50/50"
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                }`}
+              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${
+                activeTab === "published"
+                  ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50/50"
+                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              }`}
             >
               📜 我发布的悬赏
             </button>
@@ -112,7 +120,9 @@ export default function Profile() {
               <div className="text-5xl mb-4">🏗️</div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">施工中</h3>
               <p className="text-gray-500">
-                {activeTab === "journey" ? "我的征途功能正在建设中..." : "悬赏发布功能正在建设中..."}
+                {activeTab === "journey"
+                  ? "我的征途功能正在建设中..."
+                  : "悬赏发布功能正在建设中..."}
               </p>
             </div>
           </div>

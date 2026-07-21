@@ -10,19 +10,25 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadUser();
-  }, []);
+    let ignore = false;
 
-  async function loadUser() {
-    try {
-      const currentUser = await userApi.getCurrentUser();
-      setUser(currentUser);
-    } catch (error) {
-      console.error("Failed to load user:", error);
-    } finally {
-      setLoading(false);
+    async function fetchUser() {
+      try {
+        const currentUser = await userApi.getCurrentUser();
+        if (!ignore) setUser(currentUser);
+      } catch (error) {
+        console.error("Failed to load user:", error);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
     }
-  }
+
+    fetchUser();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   if (loading) {
     return (

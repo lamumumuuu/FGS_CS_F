@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { login } from "@/services/userService";
+import { userApi } from "@/app/api/client";
 
 export default function Login() {
   const router = useRouter();
@@ -18,7 +18,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login({ username, password });
+      await userApi.login({ username, password });
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败");

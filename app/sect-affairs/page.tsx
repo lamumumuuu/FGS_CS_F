@@ -9,18 +9,7 @@ import {
   SectRole,
   ContextMenuItem,
 } from "@/types/sect";
-import {
-  getCurrentUser,
-  getAllDisciples,
-  getManagementDisciples,
-  getAllPeaks,
-  getDisciplesByPeak,
-  searchDisciples,
-  filterDisciplesByPeak,
-  moveDisciplePeak,
-  deleteDisciple,
-  rewardDisciple,
-} from "@/services/sectService";
+import { sectApi } from "@/app/api/client";
 import DiscipleItem from "@/components/DiscipleItem";
 import ContextMenu from "@/components/ContextMenu";
 import Modal from "@/components/Modal";
@@ -76,9 +65,9 @@ export default function SectAffairs() {
     setLoading(true);
     try {
       const [user, peaksData, managementData] = await Promise.all([
-        getCurrentUser(),
-        getAllPeaks(),
-        getManagementDisciples(),
+        sectApi.getCurrentUser(),
+        sectApi.getAllPeaks(),
+        sectApi.getManagementDisciples(),
       ]);
       setCurrentUser(user);
       setPeaks(peaksData);
@@ -101,9 +90,9 @@ export default function SectAffairs() {
     try {
       let data: Disciple[];
       if (searchKeyword) {
-        data = await searchDisciples(searchKeyword);
+        data = await sectApi.searchDisciples(searchKeyword);
       } else {
-        data = await filterDisciplesByPeak(filterPeak);
+        data = await sectApi.filterDisciplesByPeak(filterPeak);
       }
       setAllDisciples(data);
     } catch (error) {
@@ -118,7 +107,7 @@ export default function SectAffairs() {
     } else {
       setExpandedPeak(peakName);
       try {
-        const members = await getDisciplesByPeak(peakName);
+        const members = await sectApi.getDisciplesByPeak(peakName);
         setPeakMembers(members);
       } catch (error) {
         console.error("Failed to load peak members:", error);
@@ -158,13 +147,13 @@ export default function SectAffairs() {
 
     setActionLoading(true);
     try {
-      const success = await deleteDisciple(disciple.id);
+      const success = await sectApi.deleteDisciple(disciple.id);
       if (success) {
         showToast(`已删除弟子 ${disciple.name}`, "success");
         loadInitialData();
         if (viewMode === "roster") loadDisciples();
         if (expandedPeak) {
-          const members = await getDisciplesByPeak(expandedPeak);
+          const members = await sectApi.getDisciplesByPeak(expandedPeak);
           setPeakMembers(members);
         }
       }
@@ -179,7 +168,7 @@ export default function SectAffairs() {
     if (!selectedDisciple) return;
     setActionLoading(true);
     try {
-      const success = await rewardDisciple(selectedDisciple.id, rewardAmount);
+      const success = await sectApi.rewardDisciple(selectedDisciple.id, rewardAmount);
       if (success) {
         showToast(`已打赏 ${selectedDisciple.name} ${rewardAmount} 灵石`, "success");
         setShowRewardModal(false);
@@ -195,14 +184,14 @@ export default function SectAffairs() {
     if (!selectedDisciple) return;
     setActionLoading(true);
     try {
-      const success = await moveDisciplePeak(selectedDisciple.id, moveTargetPeak);
+      const success = await sectApi.moveDisciplePeak(selectedDisciple.id, moveTargetPeak);
       if (success) {
         showToast(`已将 ${selectedDisciple.name} 移至 ${moveTargetPeak}`, "success");
         setShowMoveModal(false);
         loadInitialData();
         if (viewMode === "roster") loadDisciples();
         if (expandedPeak) {
-          const members = await getDisciplesByPeak(expandedPeak);
+          const members = await sectApi.getDisciplesByPeak(expandedPeak);
           setPeakMembers(members);
         }
       }
@@ -451,16 +440,16 @@ export default function SectAffairs() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`px-2.5 py-1 rounded-full text-xs font-medium ${disciple.role === "宗主"
-                                ? "bg-purple-100 text-purple-700"
-                                : disciple.role === "大长老"
-                                  ? "bg-red-100 text-red-700"
-                                  : disciple.role === "太上长老"
-                                    ? "bg-indigo-100 text-indigo-700"
-                                    : disciple.role === "荣誉长老"
-                                      ? "bg-amber-100 text-amber-700"
-                                      : disciple.role === "长老"
-                                        ? "bg-blue-100 text-blue-700"
-                                        : "bg-green-100 text-green-700"
+                              ? "bg-purple-100 text-purple-700"
+                              : disciple.role === "大长老"
+                                ? "bg-red-100 text-red-700"
+                                : disciple.role === "太上长老"
+                                  ? "bg-indigo-100 text-indigo-700"
+                                  : disciple.role === "荣誉长老"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : disciple.role === "长老"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : "bg-green-100 text-green-700"
                               }`}
                           >
                             {disciple.role}

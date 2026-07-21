@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { User } from "@/types/user";
-import { getCurrentUser } from "@/services/userService";
+import { userApi } from "@/app/api/client";
 import Link from "next/link";
 
 export default function Home() {
@@ -15,7 +15,7 @@ export default function Home() {
 
   async function loadUser() {
     try {
-      const currentUser = await getCurrentUser();
+      const currentUser = await userApi.getCurrentUser();
       setUser(currentUser);
     } catch (error) {
       console.error("Failed to load user:", error);

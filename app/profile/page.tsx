@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { User } from "@/types/user";
-import { getCurrentUser } from "@/services/userService";
+import { userApi } from "@/app/api/client";
 import Link from "next/link";
 
 type TabType = "journey" | "published";
@@ -18,7 +18,7 @@ export default function Profile() {
 
   async function loadUser() {
     try {
-      const currentUser = await getCurrentUser();
+      const currentUser = await userApi.getCurrentUser();
       setUser(currentUser);
     } catch (error) {
       console.error("Failed to load user:", error);
@@ -89,21 +89,19 @@ export default function Profile() {
           <div className="flex border-b border-amber-50">
             <button
               onClick={() => setActiveTab("journey")}
-              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${
-                activeTab === "journey"
-                  ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50/50"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
+              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${activeTab === "journey"
+                ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50/50"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
             >
               🗺️ 我的征途
             </button>
             <button
               onClick={() => setActiveTab("published")}
-              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${
-                activeTab === "published"
-                  ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50/50"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
+              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${activeTab === "published"
+                ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50/50"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
             >
               📜 我发布的悬赏
             </button>

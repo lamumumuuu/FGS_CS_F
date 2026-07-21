@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { register } from "@/services/userService";
+import { userApi } from "@/app/api/client";
 
 export default function Register() {
   const router = useRouter();
@@ -25,7 +25,7 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await register({ username, password, studentId });
+      await userApi.register({ username, password, studentId });
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "注册失败");

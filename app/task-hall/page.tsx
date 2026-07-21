@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Task, TaskDifficulty, TaskStatus, TaskFilters } from "@/types/task";
-import { fetchTasks, fetchTaskById } from "@/services/taskService";
+import { taskApi } from "@/app/api/client";
 import TaskCard from "@/components/TaskCard";
 import TaskDetail from "@/components/TaskDetail";
 
@@ -42,7 +42,7 @@ export default function TaskHall() {
   async function loadTasks() {
     setLoading(true);
     try {
-      const data = await fetchTasks(filters);
+      const data = await taskApi.getTasks(filters);
       setTasks(data);
     } catch (error) {
       console.error("Failed to load tasks:", error);
@@ -53,7 +53,7 @@ export default function TaskHall() {
 
   async function handleTaskClick(taskId: string) {
     try {
-      const task = await fetchTaskById(taskId);
+      const task = await taskApi.getTaskById(taskId);
       if (task) {
         setSelectedTask(task);
         setViewMode("detail");

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { siteConfig, navMenuItems } from "@/siteConfig";
 import { useState, useEffect, useRef } from "react";
 import { User } from "@/types/user";
-import { getCurrentUser, logout } from "@/services/userService";
+import { userApi } from "@/app/api/client";
 import { useRouter } from "next/navigation";
 
 export default function Navbar() {
@@ -22,7 +22,7 @@ export default function Navbar() {
 
   async function loadUser() {
     try {
-      const currentUser = await getCurrentUser();
+      const currentUser = await userApi.getCurrentUser();
       setUser(currentUser);
     } catch (error) {
       console.error("Failed to load user:", error);
@@ -39,7 +39,7 @@ export default function Navbar() {
 
   async function handleLogout() {
     try {
-      await logout();
+      await userApi.logout();
       setShowAvatarDropdown(false);
       loadUser();
       router.push("/");
@@ -72,11 +72,10 @@ export default function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`text-base font-medium transition-colors hover:text-amber-200 ${
-                pathname === item.href
-                  ? "text-amber-200 border-b-2 border-amber-200 pb-1"
-                  : "text-white"
-              }`}
+              className={`text-base font-medium transition-colors hover:text-amber-200 ${pathname === item.href
+                ? "text-amber-200 border-b-2 border-amber-200 pb-1"
+                : "text-white"
+                }`}
             >
               {item.label}
             </Link>
@@ -99,11 +98,10 @@ export default function Navbar() {
             onMouseLeave={handleMouseLeave}
           >
             <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 cursor-pointer transition-colors ${
-                isLoggedIn
-                  ? "bg-amber-600 border-amber-400"
-                  : "bg-gray-400 border-gray-300"
-              }`}
+              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 cursor-pointer transition-colors ${isLoggedIn
+                ? "bg-amber-600 border-amber-400"
+                : "bg-gray-400 border-gray-300"
+                }`}
             >
               <span className="text-lg">👤</span>
             </div>

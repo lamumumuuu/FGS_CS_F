@@ -1,18 +1,26 @@
+// types/task.ts
+
+/** 任务难度 */
 export type TaskDifficulty = "黑铁" | "青铜" | "白银" | "黄金";
+
+/** 任务生命周期状态 */
 export type TaskStatus = "审核中" | "等待中" | "讨伐中" | "已完成";
 
+/** 发布者简要信息 */
 export interface TaskPublisher {
   id: string;
   name: string;
   avatar: string;
 }
 
+/** 完成者简要信息 */
 export interface TaskCompleter {
   id: string;
   name: string;
   avatar: string;
 }
 
+/** 完整任务对象 */
 export interface Task {
   id: string;
   title: string;
@@ -27,6 +35,7 @@ export interface Task {
   completer?: TaskCompleter;
 }
 
+/** 任务列表筛选条件 */
 export interface TaskFilters {
   difficulty: TaskDifficulty | "全部难度";
   status: TaskStatus | "全部状态";

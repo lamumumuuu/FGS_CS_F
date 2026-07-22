@@ -1,3 +1,13 @@
+// app/sect-affairs/page.tsx
+
+/**
+ * 宗门事务页面
+ * 
+ * 展示宗门详情（实力分布）和弟子名册，支持搜索、筛选和右键菜单操作。
+ * 包含弟子移动、打赏、删除等管理功能。
+ * 采用米白色系设计风格，与整体 UI 保持一致。
+ */
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -22,6 +32,9 @@ const contextMenuItems: ContextMenuItem[] = [
   { label: "删除弟子", action: "delete", permission: "delete_disciple", icon: "🗑️" },
 ];
 
+/* ------------------------------------------------------------------ */
+/*  页面组件                                                           */
+/* ------------------------------------------------------------------ */
 export default function SectAffairs() {
   const [viewMode, setViewMode] = useState<ViewMode>("detail");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -61,7 +74,7 @@ export default function SectAffairs() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // 初始数据加载
+  /* ---------- 初始数据加载 ---------- */
   useEffect(() => {
     let ignore = false;
     async function fetchInitialData() {
@@ -88,7 +101,7 @@ export default function SectAffairs() {
     return () => { ignore = true; };
   }, [showToast]);
 
-  // 弟子列表加载（切换模式或搜索条件变化时）
+  /* ---------- 弟子列表加载 ---------- */
   useEffect(() => {
     if (viewMode !== "roster") return;
     let ignore = false;
@@ -236,17 +249,36 @@ export default function SectAffairs() {
     return (currentUser?.permissions as string[])?.includes(permission) ?? false;
   };
 
+  /* ------------------------------------------------------------------ */
+  /*  加载中                                                             */
+  /* ------------------------------------------------------------------ */
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-amber-50/30">
-        <div className="text-amber-600 text-lg">加载中...</div>
+      <div
+        className="flex-1 flex items-center justify-center"
+        style={{ backgroundColor: "#F5F3F0" }}
+      >
+        <div className="text-gray-500 text-lg">加载中...</div>
       </div>
     );
   }
 
+  /* ------------------------------------------------------------------ */
+  /*  渲染                                                              */
+  /* ------------------------------------------------------------------ */
   return (
-    <div className="flex-1 bg-amber-50/30 py-8 px-4 sm:px-6 lg:px-8">
+    <div
+      className="flex-1 py-8 px-4 sm:px-6 lg:px-8 min-h-[calc(100vh-72px)]"
+      style={{
+        backgroundColor: "#F5F3F0",
+        backgroundImage: `
+          radial-gradient(ellipse at top left, rgba(200, 180, 160, 0.08) 0%, transparent 50%),
+          radial-gradient(ellipse at bottom right, rgba(180, 160, 140, 0.06) 0%, transparent 50%)
+        `,
+      }}
+    >
       <div className="max-w-6xl mx-auto">
+        {/* ---------- 页头 ---------- */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">
@@ -263,13 +295,13 @@ export default function SectAffairs() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => openWipModal("添加弟子")}
-                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                  className="px-4 py-2 bg-gray-800 text-white text-sm font-medium rounded-none hover:bg-gray-900 transition-colors"
                 >
                   ➕ 添加弟子
                 </button>
                 <button
                   onClick={() => openWipModal("批量导入")}
-                  className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-none hover:bg-gray-50 transition-colors"
                 >
                   📥 批量导入
                 </button>
@@ -277,25 +309,30 @@ export default function SectAffairs() {
             )}
             <button
               onClick={() => setViewMode(viewMode === "detail" ? "roster" : "detail")}
-              className="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 text-white font-medium rounded-lg shadow-sm hover:from-amber-700 hover:to-amber-600 transition-all"
+              className="px-5 py-2.5 bg-gray-800 text-white font-medium rounded-none hover:bg-gray-900 transition-all"
             >
               {viewMode === "detail" ? "📋 弟子名册" : "🏛️ 实力分布"}
             </button>
           </div>
         </div>
 
+        {/* ---------- 视图：detail（实力分布） ---------- */}
         {viewMode === "detail" ? (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-md border border-amber-100 overflow-hidden">
+            {/* 管理台 */}
+            <div
+              className="rounded-none shadow-md border border-gray-300 overflow-hidden"
+              style={{ backgroundColor: "#FAF9F7" }}
+            >
               <div
                 onClick={() => setExpandedManagement(!expandedManagement)}
-                className="px-6 py-4 bg-gradient-to-r from-purple-700 to-purple-600 text-white cursor-pointer flex items-center justify-between hover:from-purple-800 hover:to-purple-700 transition-colors"
+                className="px-6 py-4 bg-gray-800 text-white cursor-pointer flex items-center justify-between hover:bg-gray-900 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">🏛️</span>
                   <div>
                     <h2 className="text-xl font-bold">管理台</h2>
-                    <p className="text-sm text-purple-200">宗门高层管理团队</p>
+                    <p className="text-sm text-gray-300">宗门高层管理团队</p>
                   </div>
                 </div>
                 <span className={`text-xl transition-transform ${expandedManagement ? "rotate-180" : ""}`}>
@@ -315,15 +352,17 @@ export default function SectAffairs() {
               )}
             </div>
 
+            {/* 各峰卡片网格 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {peaks.map((peak) => (
                 <div
                   key={peak.name}
-                  className="bg-white rounded-xl shadow-md border border-amber-100 overflow-hidden"
+                  className="rounded-none shadow-md border border-gray-300 overflow-hidden"
+                  style={{ backgroundColor: "#FAF9F7" }}
                 >
                   <div
                     onClick={() => handlePeakClick(peak.name)}
-                    className="px-6 py-4 bg-gradient-to-r from-amber-700 to-amber-600 text-white cursor-pointer flex items-center justify-between hover:from-amber-800 hover:to-amber-700 transition-colors"
+                    className="px-6 py-4 bg-gray-700 text-white cursor-pointer flex items-center justify-between hover:bg-gray-800 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">
@@ -331,19 +370,18 @@ export default function SectAffairs() {
                       </span>
                       <div>
                         <h2 className="text-xl font-bold">{peak.name}</h2>
-                        <p className="text-sm text-amber-200">
+                        <p className="text-sm text-gray-300">
                           {peak.memberCount} 名弟子
                         </p>
                       </div>
                     </div>
                     <span
-                      className={`text-xl transition-transform ${expandedPeak === peak.name ? "rotate-180" : ""
-                        }`}
+                      className={`text-xl transition-transform ${expandedPeak === peak.name ? "rotate-180" : ""}`}
                     >
                       ▼
                     </span>
                   </div>
-                  <div className="px-6 py-3 text-sm text-gray-600 border-b border-amber-50">
+                  <div className="px-6 py-3 text-sm text-gray-600 border-b border-gray-200">
                     {peak.description}
                   </div>
                   {expandedPeak === peak.name && (
@@ -367,21 +405,28 @@ export default function SectAffairs() {
                 </div>
               ))}
 
+              {/* 开辟新峰 */}
               {hasPermission("manage_peaks") && (
                 <div
                   onClick={() => openWipModal("开辟新峰")}
-                  className="bg-white rounded-xl border-2 border-dashed border-amber-200 p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-amber-400 hover:bg-amber-50/50 transition-all min-h-[160px]"
+                  className="rounded-none border-2 border-dashed border-gray-300 p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-gray-500 hover:bg-gray-50 transition-all min-h-[160px]"
+                  style={{ backgroundColor: "#FAF9F7" }}
                 >
                   <span className="text-4xl mb-3">⛰️</span>
-                  <h3 className="text-lg font-bold text-amber-700">开辟新峰</h3>
+                  <h3 className="text-lg font-bold text-gray-700">开辟新峰</h3>
                   <p className="text-sm text-gray-500 mt-1">创建新的门派分支</p>
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-md border border-amber-100 overflow-hidden">
-            <div className="p-4 border-b border-amber-50 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+          /* ---------- 视图：roster（弟子名册） ---------- */
+          <div
+            className="rounded-none shadow-md border border-gray-300 overflow-hidden"
+            style={{ backgroundColor: "#FAF9F7" }}
+          >
+            {/* 搜索筛选栏 */}
+            <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
               <div className="flex-1">
                 <div className="relative">
                   <input
@@ -389,7 +434,7 @@ export default function SectAffairs() {
                     placeholder="搜索弟子姓名或学号..."
                     value={searchKeyword}
                     onChange={(e) => setSearchKeyword(e.target.value)}
-                    className="w-full px-4 py-2.5 pl-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
+                    className="w-full px-4 py-2.5 pl-10 border border-gray-300 rounded-none bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm"
                   />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                     🔍
@@ -401,7 +446,7 @@ export default function SectAffairs() {
                 <select
                   value={filterPeak}
                   onChange={(e) => setFilterPeak(e.target.value as SectPeak | "全部")}
-                  className="px-3 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm cursor-pointer"
+                  className="px-3 py-2 border border-gray-300 rounded-none bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm cursor-pointer"
                 >
                   <option value="全部">全部角色</option>
                   <option value="管理台">管理台</option>
@@ -412,9 +457,10 @@ export default function SectAffairs() {
               </div>
             </div>
 
+            {/* 弟子表格 */}
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-amber-50">
+                <thead className="bg-gray-100">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       弟子名字
@@ -430,7 +476,7 @@ export default function SectAffairs() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-amber-50">
+                <tbody className="divide-y divide-gray-200">
                   {allDisciples.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
@@ -442,11 +488,11 @@ export default function SectAffairs() {
                       <tr
                         key={disciple.id}
                         onContextMenu={(e) => handleContextMenu(e, disciple)}
-                        className="hover:bg-amber-50/50 cursor-pointer transition-colors"
+                        className="hover:bg-gray-50 cursor-pointer transition-colors"
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                            <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 font-bold text-sm border border-gray-300">
                               {disciple.name.charAt(0)}
                             </div>
                             <span className="font-medium text-gray-800">
@@ -459,23 +505,24 @@ export default function SectAffairs() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-medium ${disciple.role === "宗主"
-                              ? "bg-purple-100 text-purple-700"
-                              : disciple.role === "大长老"
-                                ? "bg-red-100 text-red-700"
+                            className={`px-2.5 py-1 rounded-none text-xs font-medium border ${
+                              disciple.role === "宗主"
+                                ? "bg-purple-100 text-purple-700 border-purple-300"
+                                : disciple.role === "大长老"
+                                ? "bg-red-100 text-red-700 border-red-300"
                                 : disciple.role === "太上长老"
-                                  ? "bg-indigo-100 text-indigo-700"
-                                  : disciple.role === "荣誉长老"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : disciple.role === "长老"
-                                      ? "bg-blue-100 text-blue-700"
-                                      : "bg-green-100 text-green-700"
-                              }`}
+                                ? "bg-indigo-100 text-indigo-700 border-indigo-300"
+                                : disciple.role === "荣誉长老"
+                                ? "bg-amber-100 text-amber-700 border-amber-300"
+                                : disciple.role === "长老"
+                                ? "bg-blue-100 text-blue-700 border-blue-300"
+                                : "bg-green-100 text-green-700 border-green-300"
+                            }`}
                           >
                             {disciple.role}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-700">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                           {disciple.peak}
                         </td>
                       </tr>
@@ -485,13 +532,14 @@ export default function SectAffairs() {
               </table>
             </div>
 
-            <div className="px-6 py-3 border-t border-amber-50 text-sm text-gray-500">
+            <div className="px-6 py-3 border-t border-gray-200 text-sm text-gray-500">
               共 {allDisciples.length} 名弟子
             </div>
           </div>
         )}
       </div>
 
+      {/* ---------- 右键菜单 ---------- */}
       {contextMenu && currentUser && (
         <ContextMenu
           x={contextMenu.x}
@@ -503,6 +551,7 @@ export default function SectAffairs() {
         />
       )}
 
+      {/* ---------- 施工中弹窗 ---------- */}
       <Modal isOpen={showWipModal} onClose={() => setShowWipModal(false)} title={wipTitle}>
         <div className="text-center py-6">
           <div className="text-5xl mb-4">🏗️</div>
@@ -510,11 +559,15 @@ export default function SectAffairs() {
         </div>
       </Modal>
 
+      {/* ---------- 打赏弹窗 ---------- */}
       <Modal isOpen={showRewardModal} onClose={() => setShowRewardModal(false)} title="打赏弟子">
         {selectedDisciple && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
-              <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold">
+            <div
+              className="flex items-center gap-3 p-3 rounded-none border border-gray-200"
+              style={{ backgroundColor: "#FAF9F7" }}
+            >
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 font-bold border border-gray-300">
                 {selectedDisciple.name.charAt(0)}
               </div>
               <div>
@@ -531,13 +584,13 @@ export default function SectAffairs() {
                 value={rewardAmount}
                 onChange={(e) => setRewardAmount(Number(e.target.value))}
                 min={1}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-none bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
               />
             </div>
             <button
               onClick={handleRewardSubmit}
               disabled={actionLoading}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 text-white font-medium rounded-lg hover:from-amber-700 hover:to-amber-600 transition-all disabled:opacity-50"
+              className="w-full py-2.5 bg-gray-800 text-white font-medium rounded-none hover:bg-gray-900 transition-all disabled:opacity-50"
             >
               {actionLoading ? "处理中..." : "确认打赏"}
             </button>
@@ -545,11 +598,15 @@ export default function SectAffairs() {
         )}
       </Modal>
 
+      {/* ---------- 移动门派弹窗 ---------- */}
       <Modal isOpen={showMoveModal} onClose={() => setShowMoveModal(false)} title="移动门派">
         {selectedDisciple && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
-              <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold">
+            <div
+              className="flex items-center gap-3 p-3 rounded-none border border-gray-200"
+              style={{ backgroundColor: "#FAF9F7" }}
+            >
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 font-bold border border-gray-300">
                 {selectedDisciple.name.charAt(0)}
               </div>
               <div>
@@ -564,7 +621,7 @@ export default function SectAffairs() {
               <select
                 value={moveTargetPeak}
                 onChange={(e) => setMoveTargetPeak(e.target.value as SectPeak)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-none bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
               >
                 <option value="项目峰">项目峰</option>
                 <option value="算法峰">算法峰</option>
@@ -574,7 +631,7 @@ export default function SectAffairs() {
             <button
               onClick={handleMoveSubmit}
               disabled={actionLoading}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 text-white font-medium rounded-lg hover:from-amber-700 hover:to-amber-600 transition-all disabled:opacity-50"
+              className="w-full py-2.5 bg-gray-800 text-white font-medium rounded-none hover:bg-gray-900 transition-all disabled:opacity-50"
             >
               {actionLoading ? "处理中..." : "确认移动"}
             </button>
@@ -582,10 +639,12 @@ export default function SectAffairs() {
         )}
       </Modal>
 
+      {/* ---------- Toast 提示 ---------- */}
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white font-medium z-50 animate-in fade-in slide-in-from-bottom-5 ${toast.type === "success" ? "bg-green-600" : "bg-red-600"
-            }`}
+          className={`fixed bottom-6 right-6 px-5 py-3 rounded-none shadow-lg text-white font-medium z-50 ${
+            toast.type === "success" ? "bg-green-700" : "bg-red-700"
+          }`}
         >
           {toast.message}
         </div>

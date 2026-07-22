@@ -1,10 +1,20 @@
+/* app/globals.css */
+
+/**
+ * 全局样式表
+ * 导入 Tailwind CSS，定义基础 CSS 变量与暗色模式适配。
+ */
+
+/* 引入 Tailwind 的基础样式、组件样式和工具类 */
 @import "tailwindcss";
 
+/* 根级 CSS 变量，定义亮色主题背景与文字色 */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #ffffff;    /* 亮色背景 */
+  --foreground: #171717;    /* 亮色文字 */
 }
 
+/* 将 CSS 变量映射为 Tailwind 主题色，供 utility class 使用 */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,13 +22,15 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* 跟随系统偏好自动切换暗色模式 */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0a0a0a;  /* 暗色背景 */
+    --foreground: #ededed;  /* 暗色文字 */
   }
 }
 
+/* 全局 body 基础样式 */
 body {
   background: var(--background);
   color: var(--foreground);

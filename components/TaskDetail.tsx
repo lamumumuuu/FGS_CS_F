@@ -1,13 +1,23 @@
+// components/TaskDetail.tsx
+
+/**
+ * 任务详情组件
+ * 
+ * 展示单个任务的完整信息，包括描述、技术需求、发布者、赏金等。
+ * 根据任务状态提供“接受委托”按钮或禁用状态。
+ */
+
 "use client";
 
 import { Task, TaskDifficulty, TaskStatus } from "@/types/task";
 
 interface TaskDetailProps {
-  task: Task;
-  onBack: () => void;
-  onAccept?: () => void;
+  task: Task;                        /// 任务数据
+  onBack: () => void;                /// 返回列表回调
+  onAccept?: () => void;             /// 接受委托回调（仅等待中状态可用）
 }
 
+/** 难度徽章样式 */
 const difficultyStyles: Record<TaskDifficulty, string> = {
   黑铁: "bg-gray-700 text-gray-100",
   青铜: "bg-amber-700 text-amber-50",
@@ -15,6 +25,7 @@ const difficultyStyles: Record<TaskDifficulty, string> = {
   黄金: "bg-yellow-500 text-yellow-900",
 };
 
+/** 状态徽章样式 */
 const statusStyles: Record<TaskStatus, string> = {
   审核中: "bg-blue-100 text-blue-700 border-blue-200",
   等待中: "bg-green-100 text-green-700 border-green-200",
@@ -23,10 +34,11 @@ const statusStyles: Record<TaskStatus, string> = {
 };
 
 export default function TaskDetail({ task, onBack, onAccept }: TaskDetailProps) {
-  const canAccept = task.status === "等待中";
+  const canAccept = task.status === "等待中";   /// 只有等待中的任务可被接受
 
   return (
     <div className="w-full max-w-4xl mx-auto">
+      {/* 返回按钮 */}
       <button
         onClick={onBack}
         className="mb-6 flex items-center gap-2 text-amber-700 hover:text-amber-900 font-medium transition-colors"
@@ -36,16 +48,13 @@ export default function TaskDetail({ task, onBack, onAccept }: TaskDetailProps) 
       </button>
 
       <div className="bg-white rounded-2xl shadow-lg border border-amber-100 overflow-hidden">
+        {/* 头部：难度、状态、发布者 */}
         <div className="bg-gradient-to-r from-amber-700 to-amber-600 px-8 py-6">
           <div className="flex flex-wrap items-center gap-3 mb-4">
-            <span
-              className={`px-4 py-1.5 rounded-full text-sm font-bold ${difficultyStyles[task.difficulty]}`}
-            >
+            <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${difficultyStyles[task.difficulty]}`}>
               {task.difficulty}
             </span>
-            <span
-              className={`px-4 py-1.5 rounded-full text-sm font-medium border ${statusStyles[task.status]}`}
-            >
+            <span className={`px-4 py-1.5 rounded-full text-sm font-medium border ${statusStyles[task.status]}`}>
               {task.status}
             </span>
             <div className="flex items-center gap-2 text-amber-100">
@@ -59,6 +68,7 @@ export default function TaskDetail({ task, onBack, onAccept }: TaskDetailProps) 
         </div>
 
         <div className="p-8">
+          {/* 基础信息栏 */}
           <div className="flex flex-wrap gap-6 mb-6 pb-6 border-b border-amber-50">
             <div className="flex items-center gap-2">
               <span className="text-gray-500">发布者：</span>
@@ -74,6 +84,7 @@ export default function TaskDetail({ task, onBack, onAccept }: TaskDetailProps) 
             </div>
           </div>
 
+          {/* 任务描述 */}
           <div className="mb-8">
             <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
               <span className="w-1 h-5 bg-amber-500 rounded-full"></span>
@@ -84,6 +95,7 @@ export default function TaskDetail({ task, onBack, onAccept }: TaskDetailProps) 
             </p>
           </div>
 
+          {/* 技术需求标签 */}
           <div className="mb-8">
             <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
               <span className="w-1 h-5 bg-amber-500 rounded-full"></span>
@@ -101,6 +113,7 @@ export default function TaskDetail({ task, onBack, onAccept }: TaskDetailProps) 
             </div>
           </div>
 
+          {/* 赏金与操作按钮 */}
           <div className="flex items-center justify-between pt-6 border-t border-amber-50">
             <div className="flex items-center gap-2">
               <span className="text-2xl">💎</span>

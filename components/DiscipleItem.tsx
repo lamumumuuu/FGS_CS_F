@@ -1,14 +1,24 @@
+// components/DiscipleItem.tsx
+
+/**
+ * 弟子列表项组件
+ * 
+ * 展示单个弟子的基础信息，支持点击和右键菜单事件。
+ * compact 模式用于空间受限的场景（如侧栏），会隐藏学号和所属峰。
+ */
+
 "use client";
 
 import { Disciple, SectRole } from "@/types/sect";
 
 interface DiscipleItemProps {
-  disciple: Disciple;
-  onContextMenu?: (e: React.MouseEvent, disciple: Disciple) => void;
-  onClick?: (disciple: Disciple) => void;
-  compact?: boolean;
+  disciple: Disciple;                                       /// 弟子数据
+  onContextMenu?: (e: React.MouseEvent, disciple: Disciple) => void;  /// 右键菜单触发回调
+  onClick?: (disciple: Disciple) => void;                   /// 点击弟子触发回调
+  compact?: boolean;                                        /// 是否紧凑模式
 }
 
+/** 角色对应的徽章配色 */
 const roleColors: Record<SectRole, string> = {
   宗主: "bg-purple-600 text-purple-50",
   大长老: "bg-red-600 text-red-50",
@@ -27,9 +37,11 @@ export default function DiscipleItem({ disciple, onContextMenu, onClick, compact
         compact ? "py-2" : ""
       }`}
     >
+      {/* 头像区域：取名字首字，渐变色背景 */}
       <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
         {disciple.name.charAt(0)}
       </div>
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-gray-800 truncate">{disciple.name}</span>
@@ -43,6 +55,7 @@ export default function DiscipleItem({ disciple, onContextMenu, onClick, compact
           </div>
         )}
       </div>
+
       {!compact && (
         <div className="text-sm text-amber-600 flex-shrink-0">{disciple.peak}</div>
       )}

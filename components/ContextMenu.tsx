@@ -1,20 +1,32 @@
+// components/ContextMenu.tsx
+
+/**
+ * 右键菜单组件
+ * 
+ * 在指定坐标显示一个可自定义的菜单列表。
+ * 根据当前用户权限过滤可见菜单项，点击菜单外部或按下 Esc 关闭。
+ */
+
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ContextMenuItem, Permission, CurrentUser } from "@/types/sect";
+import { ContextMenuItem, CurrentUser } from "@/types/sect";
 
 interface ContextMenuProps {
-  x: number;
-  y: number;
-  items: ContextMenuItem[];
-  currentUser: CurrentUser;
-  onSelect: (action: string) => void;
-  onClose: () => void;
+  x: number;                               /// 菜单左上角 X 坐标（相对于视口）
+  y: number;                               /// 菜单左上角 Y 坐标
+  items: ContextMenuItem[];                /// 菜单项配置列表
+  currentUser: CurrentUser;                /// 当前用户信息，用于权限过滤
+  onSelect: (action: string) => void;      /// 选中菜单项回调，返回 action 标识
+  onClose: () => void;                     /// 关闭菜单回调
 }
 
 export default function ContextMenu({ x, y, items, currentUser, onSelect, onClose }: ContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);  /// 菜单 DOM 引用，用于判断点击是否在菜单内
 
+  /* ------------------------------------------------------------------ */
+  /*  全局事件监听：点击菜单外 / 按下 Esc 关闭菜单                     */
+  /* ------------------------------------------------------------------ */
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -36,11 +48,15 @@ export default function ContextMenu({ x, y, items, currentUser, onSelect, onClos
     };
   }, [onClose]);
 
+  /* ------------------------------------------------------------------ */
+  /*  根据用户权限过滤可见菜单项                                       */
+  /* ------------------------------------------------------------------ */
   const visibleItems = items.filter((item) => {
-    if (!item.permission) return true;
+    if (!item.permission) return true;     /// 无权限要求项默认显示
     return currentUser.permissions.includes(item.permission);
   });
 
+  // 无可显示菜单项时不渲染
   if (visibleItems.length === 0) return null;
 
   return (

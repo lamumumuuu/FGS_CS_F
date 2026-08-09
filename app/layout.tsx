@@ -11,8 +11,12 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import AuthGuard from "@/components/AuthGuard";
 import { siteConfig } from "@/siteConfig";
 import { PermissionProvider } from "@/contexts/PermissionContext";
+import { ToastProvider } from "@/contexts/ToastContext";
+import PermissionAutoRefresh from "@/components/PermissionAutoRefresh";
+import { PageTransitionProvider } from "@/components/PageTransition";
 
 /* ------------------------------------------------------------------ */
 /*  字体配置：Geist Sans 和 Geist Mono，通过 CSS 变量引入           */
@@ -51,8 +55,21 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {/* 权限上下文包裹整个应用，子组件可使用 usePermission() */}
         <PermissionProvider>
-          <Navbar />               {/* 顶部导航栏 */}
-          {children}               {/* 页面主体内容 */}
+          <ToastProvider>
+            <PermissionAutoRefresh />
+            {/*
+              PageTransitionProvider 分为两个区域：
+              1. stable（稳定区域）：如Navbar，不参与任何滑动动画，始终保持可见
+              2. children（滑动区域）：页面主体内容，参与滑动过渡动画
+              这样确保导航栏在页面切换时始终可见且位置不变
+            */}
+            <PageTransitionProvider stable={<Navbar />}>
+              {/* 页面级加载动画包裹层：仅包裹页面内容，导航栏在stable区域 */}
+              <AuthGuard>
+                {children}            {/* 页面主体内容 */}
+              </AuthGuard>
+            </PageTransitionProvider>
+          </ToastProvider>
         </PermissionProvider>
       </body>
     </html>

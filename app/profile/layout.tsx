@@ -42,11 +42,8 @@ export default function ProfileLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="zh-CN"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
-    </html>
+    <div className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <div className="min-h-full flex flex-col">{children}</div>
+    </div>
   );
 }

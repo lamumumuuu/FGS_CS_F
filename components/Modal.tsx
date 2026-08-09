@@ -16,7 +16,7 @@ interface ModalProps {
   onClose: () => void;                 /// 关闭回调
   title?: string;                      /// 标题文本
   children: React.ReactNode;           /// 内容
-  size?: "sm" | "md" | "lg";          /// 尺寸预设
+  size?: "sm" | "md" | "lg" | "xl";  /// 尺寸预设
 }
 
 export default function Modal({ isOpen, onClose, title, children, size = "md" }: ModalProps) {
@@ -45,6 +45,7 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
     sm: "max-w-sm",
     md: "max-w-md",
     lg: "max-w-2xl",
+    xl: "max-w-5xl",
   };
 
   return (
@@ -56,10 +57,10 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
       />
       {/* 模态框主体 */}
       <div
-        className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} overflow-hidden animate-in fade-in zoom-in duration-200`}
+        className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]`}
       >
         {title && (
-          <div className="px-6 py-4 border-b border-amber-100 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-amber-100 flex items-center justify-between flex-shrink-0">
             <h3 className="text-lg font-bold text-gray-800">{title}</h3>
             <button
               onClick={onClose}
@@ -69,7 +70,7 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
             </button>
           </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="p-6 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );

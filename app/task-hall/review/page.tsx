@@ -1,15 +1,15 @@
 // app/task-hall/review/page.tsx
 
 /**
- * 任务大厅 - 审核页面
+ * 任务大厅 - 审核页面（风格统一版）
  * 
- * 仅对授权用户（管理员/审核员）可见，用于审核待发布的悬赏任务。
+ * 仅对拥有 quest:review 权限的用户可见，用于审核待发布的悬赏任务。
+ * 卡片设计沿用 TaskCard 的风格：双色渐变背景、圆角、悬停发光。
  * 功能：
  * - 查看待审核任务列表
  * - 查看任务详情
- * - 审核通过 / 拒绝任务
- * 
- * 采用木质纹理背景风格设计，与任务大厅整体风格一致。
+ * - 审核通过 / 拒绝任务（可填写驳回原因）
+ * - 查看审核历史记录
  */
 
 "use client";
@@ -17,38 +17,63 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Task } from "@/types/task";
+import { Task, TaskDifficulty } from "@/types/task";
 import { taskApi } from "@/app/api/client";
 import { usePermission } from "@/contexts/PermissionContext";
+import { QUEST_PERMISSIONS } from "@/types/permissions";
+import Modal from "@/components/Modal";
 
-/* ------------------------------------------------------------------ */
-/*  页面组件                                                           */
-/* ------------------------------------------------------------------ */
+interface ReviewRecord {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  reviewerName: string;
+  result: "approved" | "rejected";
+  resultText: string;
+  reason?: string;
+  reviewedAt: string;
+}
+
+const difficultyStyles: Record<TaskDifficulty, string> = {
+  黑铁: "bg-stone-200 text-stone-700 border border-stone-400",
+  青铜: "bg-orange-100 text-orange-700 border border-orange-300",
+  白银: "bg-gray-100 text-gray-700 border border-gray-300",
+  黄金: "bg-yellow-100 text-yellow-700 border border-yellow-300",
+};
+
+// 统一卡片样式（与 TaskCard 完全一致）
+const cardBaseClass =
+  "rounded-xl border border-transparent bg-gradient-to-br from-[#edddbc] to-[#dcc89a] transition-all duration-300 " +
+  "hover:shadow-[0_0_20px_rgba(237,221,188,0.6)] hover:border-[#dcc89a]/40";
+
 export default function TaskReview() {
   const router = useRouter();
-  const { isAuthenticated, loading: authLoading, hasRole, hasPermission } = usePermission();
+  const { isAuthenticated, loading: authLoading, hasPermission } = usePermission();
 
-  /* ---------- 状态 ---------- */
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [reviewHistory, setReviewHistory] = useState<ReviewRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending");
 
-  /* ------------------------------------------------------------------ */
-  /*  权限检查：未登录或无权限时重定向                                 */
-  /* ------------------------------------------------------------------ */
+  const showToastMessage = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push("/login");
+      router.push("/auth");
     }
-  }, [authLoading, isAuthenticated, router]);
+  }, [authLoading, isAuthenticated]);
 
-  /* ------------------------------------------------------------------ */
-  /*  数据获取：待审核任务列表                                         */
-  /* ------------------------------------------------------------------ */
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -77,13 +102,41 @@ export default function TaskReview() {
     };
   }, [isAuthenticated]);
 
-  /* ------------------------------------------------------------------ */
-  /*  审核操作                                                         */
-  /* ------------------------------------------------------------------ */
+  async function fetchReviewHistory() {
+    setHistoryLoading(true);
+    try {
+      const allTasks = await taskApi.getTasks();
+      const history: ReviewRecord[] = [];
+      allTasks.forEach((task) => {
+        if (task.status === "已完成" || task.status === "已驳回") {
+          history.push({
+            id: `history-${task.id}`,
+            taskId: task.id,
+            taskTitle: task.title,
+            reviewerName: task.reviewedBy || "系统",
+            result: task.status === "已完成" ? "approved" : "rejected",
+            resultText: task.status === "已完成" ? "审核通过" : "审核驳回",
+            reason: task.rejectReason,
+            reviewedAt: task.reviewedAt || task.createdAt,
+          });
+        }
+      });
+      history.sort((a, b) => new Date(b.reviewedAt).getTime() - new Date(a.reviewedAt).getTime());
+      setReviewHistory(history);
+    } catch (err) {
+      console.error("Failed to load review history:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
-  /** 审核通过 */
   async function handleApprove(taskId: string) {
-    if (!confirm("确定通过该悬赏任务吗？")) return;
+    // 前端权限校验：审核发布任务需要 QUEST_PERMISSIONS.REVIEW
+    if (!hasPermission(QUEST_PERMISSIONS.REVIEW)) {
+      showToastMessage("您没有审核任务的权限", "error");
+      return;
+    }
+    if (!confirm("确定通过该悬赏任务吗？通过后任务将发布到任务大厅。")) return;
 
     setActionLoading(true);
     try {
@@ -91,49 +144,65 @@ export default function TaskReview() {
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
       if (selectedTask?.id === taskId) {
         setSelectedTask(null);
+        setShowDetailModal(false);
       }
-      alert("审核通过成功");
+      showToastMessage("审核通过成功", "success");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "审核失败");
+      showToastMessage(err instanceof Error ? err.message : "审核失败", "error");
     } finally {
       setActionLoading(false);
     }
   }
 
-  /** 打开拒绝弹窗 */
   function handleRejectClick(task: Task) {
+    // 前端权限校验：审核发布任务需要 QUEST_PERMISSIONS.REVIEW
+    if (!hasPermission(QUEST_PERMISSIONS.REVIEW)) {
+      showToastMessage("您没有拒绝任务的权限", "error");
+      return;
+    }
     setSelectedTask(task);
     setRejectReason("");
     setShowRejectModal(true);
   }
 
-  /** 确认拒绝 */
   async function handleConfirmReject() {
     if (!selectedTask) return;
+    // 前端权限校验：审核发布任务需要 QUEST_PERMISSIONS.REVIEW
+    if (!hasPermission(QUEST_PERMISSIONS.REVIEW)) {
+      showToastMessage("您没有拒绝任务的权限", "error");
+      return;
+    }
 
     setActionLoading(true);
     try {
       await taskApi.rejectTask(selectedTask.id, rejectReason);
       setTasks((prev) => prev.filter((t) => t.id !== selectedTask.id));
       setShowRejectModal(false);
+      if (showDetailModal) {
+        setShowDetailModal(false);
+      }
       setSelectedTask(null);
       setRejectReason("");
-      alert("已拒绝该任务");
+      showToastMessage("已拒绝该任务", "success");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "操作失败");
+      showToastMessage(err instanceof Error ? err.message : "操作失败", "error");
     } finally {
       setActionLoading(false);
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /*  无权限提示                                                       */
-  /* ------------------------------------------------------------------ */
+  function handleViewDetail(task: Task) {
+    setSelectedTask(task);
+    setShowDetailModal(true);
+  }
+
   if (authLoading) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: "#8B7355" }}
+        style={{
+          background: "radial-gradient(ellipse at 30% 35%, #291b0f 0%, #1d140b 70%)",
+        }}
       >
         <div className="text-white text-lg">加载中...</div>
       </div>
@@ -141,205 +210,343 @@ export default function TaskReview() {
   }
 
   if (!isAuthenticated) {
-    return null; // 会重定向到登录页
+    return null;
   }
 
-  // 简单权限检查：如果没有审核相关角色或权限，显示无权限提示
-  // 实际项目中应根据具体权限字段判断
-  const canReview = hasRole("admin") || hasRole("sect_master") || hasRole("elder") || hasPermission("task:review");
+  // 审核发布任务需要 QUEST_PERMISSIONS.REVIEW 权限
+  const canReview = hasPermission(QUEST_PERMISSIONS.REVIEW);
 
-  /* ------------------------------------------------------------------ */
-  /*  渲染                                                              */
-  /* ------------------------------------------------------------------ */
+  const pageBackgroundStyle: React.CSSProperties = {
+    background: "radial-gradient(ellipse at 30% 35%, #291b0f 0%, #1d140b 70%)",
+  };
+
   return (
     <div
       className="flex-1 py-8 px-4 sm:px-6 lg:px-8 min-h-[calc(100vh-72px)]"
-      style={{
-        backgroundColor: "#8B7355",
-        backgroundImage: `
-          linear-gradient(135deg, rgba(139, 115, 85, 0.9) 0%, rgba(101, 81, 59, 0.9) 100%),
-          repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px),
-          repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)
-        `,
-      }}
+      style={pageBackgroundStyle}
     >
       <div className="max-w-6xl mx-auto">
-        {/* ---------- 返回按钮 ---------- */}
         <Link
           href="/task-hall"
+          onClick={(e) => { e.preventDefault(); router.push("/task-hall"); }}
           className="inline-flex items-center gap-2 text-white hover:text-gray-200 font-medium mb-6 transition-colors"
         >
           <span>←</span>
           <span>返回任务大厅</span>
         </Link>
 
-        {/* ---------- 页头 ---------- */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-3 drop-shadow-lg">
+          <h1 className="text-3xl font-bold mb-3 drop-shadow-lg font-shan" style={{ color: "#d4a574" }}>
             📋 任务审核
           </h1>
-          <p className="text-lg text-gray-200">
+          <p className="text-medium font-shan" style={{ color: "#a07848" }}>
             审核待发布的悬赏任务，维护宗门秩序
           </p>
+          {canReview && (
+            <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 rounded-lg text-white text-sm">
+              <span>📊</span>
+              <span>待审核：{tasks.length} 条</span>
+            </div>
+          )}
         </div>
 
-        {/* ---------- 无权限提示 ---------- */}
+        {/* ---------- 权限不足提示 ---------- */}
         {!canReview && (
-          <div
-            className="rounded-none shadow-md border border-gray-300 p-12 mb-8"
-            style={{ backgroundColor: "#FAF9F7" }}
-          >
+          <div className={`${cardBaseClass} p-12`}>
             <div className="text-center">
               <div className="text-5xl mb-4">🔒</div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-3">
-                权限不足
-              </h2>
-              <p className="text-gray-600">
-                您没有审核任务的权限，请联系管理员获取授权
-              </p>
+              <h2 className="text-2xl font-bold text-gray-800 mb-3">权限不足</h2>
+              <p className="text-gray-600">您没有审核任务的权限，请联系管理员获取授权</p>
+              <Link
+                href="/task-hall"
+                onClick={(e) => { e.preventDefault(); router.push("/task-hall"); }}
+                className="inline-block mt-6 px-6 py-2.5 bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-900 transition-all"
+              >
+                返回任务大厅
+              </Link>
             </div>
           </div>
         )}
 
         {/* ---------- 错误提示 ---------- */}
         {error && canReview && (
-          <div
-            className="rounded-none border border-red-300 p-4 mb-6"
-            style={{ backgroundColor: "#FEF2F2" }}
-          >
+          <div className="rounded-lg border border-red-300 p-4 mb-6 bg-red-50">
             <p className="text-red-600">{error}</p>
           </div>
         )}
 
-        {/* ---------- 任务列表 ---------- */}
         {canReview && (
           <>
-            {loading ? (
-              <div className="flex justify-center items-center py-20">
-                <div className="text-white text-lg">加载中...</div>
-              </div>
-            ) : tasks.length === 0 ? (
-              <div
-                className="rounded-none shadow-md border border-gray-300 p-12"
-                style={{ backgroundColor: "#FAF9F7" }}
+            {/* ---------- Tab 切换 ---------- */}
+            <div className="flex mb-6 border-b border-white/20">
+              <button
+                onClick={() => setActiveTab("pending")}
+                className={`flex-1 px-6 py-3 font-medium text-center transition-colors ${activeTab === "pending"
+                  ? "text-white border-b-2 border-white"
+                  : "text-gray-300 hover:text-white"
+                  }`}
               >
-                <div className="text-center">
-                  <div className="text-5xl mb-4">🎉</div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-3">
-                    暂无待审核任务
-                  </h2>
-                  <p className="text-gray-600">
-                    所有悬赏任务都已审核完毕
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="rounded-none shadow-md border border-gray-300 p-6 hover:shadow-lg transition-all"
-                    style={{ backgroundColor: "#FAF9F7" }}
-                  >
-                    <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                      {/* 任务信息 */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <h3 className="text-xl font-bold text-gray-800">
-                            {task.title}
-                          </h3>
-                          <span
-                            className={`px-3 py-1 rounded-none text-sm font-medium ${
-                              task.difficulty === "黄金"
-                                ? "bg-yellow-100 text-yellow-700 border border-yellow-300"
-                                : task.difficulty === "白银"
-                                ? "bg-gray-100 text-gray-700 border border-gray-300"
-                                : task.difficulty === "青铜"
-                                ? "bg-orange-100 text-orange-700 border border-orange-300"
-                                : "bg-stone-200 text-stone-700 border border-stone-400"
-                            }`}
-                          >
-                            {task.difficulty}
-                          </span>
-                        </div>
+                ⏳ 待审核任务
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab("history");
+                  fetchReviewHistory();
+                }}
+                className={`flex-1 px-6 py-3 font-medium text-center transition-colors ${activeTab === "history"
+                  ? "text-white border-b-2 border-white"
+                  : "text-gray-300 hover:text-white"
+                  }`}
+              >
+                📜 审核历史记录
+              </button>
+            </div>
 
-                        <p className="text-gray-600 mb-3 line-clamp-2">
-                          {task.description}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                          <span className="flex items-center gap-1">
-                            💎 <span className="font-medium text-amber-700">{task.reward}</span> 灵石
-                          </span>
-                          <span>
-                            <span>发布者：{task.publisher?.name || "未知"}</span>                          </span>
-                          <span>
-                            {task.createdAt ? new Date(task.createdAt).toLocaleString() : ""}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 操作按钮 */}
-                      <div className="flex gap-3 flex-shrink-0">
-                        <button
-                          onClick={() => handleApprove(task.id)}
-                          disabled={actionLoading}
-                          className="px-5 py-2 bg-green-700 text-white font-medium rounded-none hover:bg-green-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          ✓ 通过
-                        </button>
-                        <button
-                          onClick={() => handleRejectClick(task)}
-                          disabled={actionLoading}
-                          className="px-5 py-2 bg-red-700 text-white font-medium rounded-none hover:bg-red-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          ✗ 拒绝
-                        </button>
-                      </div>
+            {/* ---------- 待审核任务列表 ---------- */}
+            {activeTab === "pending" && (
+              <>
+                {loading ? (
+                  <div className="flex justify-center items-center py-20">
+                    <div className="text-white text-lg">加载中...</div>
+                  </div>
+                ) : tasks.length === 0 ? (
+                  <div className={`${cardBaseClass} p-12`}>
+                    <div className="text-center">
+                      <h2 className="text-2xl font-bold text-gray-800 mb-3">暂无待审核任务</h2>
+                      <p className="text-gray-600">所有悬赏任务都已审核完毕</p>
                     </div>
                   </div>
-                ))}
-              </div>
+                ) : (
+                  <div className="space-y-4">
+                    {tasks.map((task) => (
+                      <div key={task.id} className={`${cardBaseClass} p-6`}>
+                        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <h3
+                                className="text-xl font-bold text-gray-800 cursor-pointer hover:text-amber-700 transition-colors"
+                                onClick={() => handleViewDetail(task)}
+                              >
+                                {task.title}
+                              </h3>
+                              <span className={`px-3 py-1 rounded-lg text-sm font-medium ${difficultyStyles[task.difficulty as TaskDifficulty]}`}>
+                                {task.difficulty}
+                              </span>
+                              <span className="px-3 py-1 rounded-lg text-sm font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                                审核中
+                              </span>
+                            </div>
+
+                            <p className="text-gray-600 mb-3 line-clamp-2">{task.description}</p>
+
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                              <span className="flex items-center gap-1">
+                                💎 <span className="font-medium text-amber-700">{task.reward}</span> 灵石
+                              </span>
+                              <span>发布者：{task.publisher?.name || "未知"}</span>
+                              <span>{task.createdAt}</span>
+                              <button
+                                onClick={() => handleViewDetail(task)}
+                                className="text-amber-700 hover:text-amber-800 font-medium underline underline-offset-2"
+                              >
+                                查看详情 →
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3 flex-shrink-0">
+                            <button
+                              onClick={() => handleApprove(task.id)}
+                              disabled={actionLoading}
+                              className="px-5 py-2 bg-green-700 text-white font-medium rounded-lg hover:bg-green-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ✓ 通过
+                            </button>
+                            <button
+                              onClick={() => handleRejectClick(task)}
+                              disabled={actionLoading}
+                              className="px-5 py-2 bg-red-700 text-white font-medium rounded-lg hover:bg-red-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ✗ 拒绝
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ---------- 审核历史记录 ---------- */}
+            {activeTab === "history" && (
+              <>
+                {historyLoading ? (
+                  <div className="flex justify-center items-center py-20">
+                    <div className="text-white text-lg">加载中...</div>
+                  </div>
+                ) : reviewHistory.length === 0 ? (
+                  <div className={`${cardBaseClass} p-12`}>
+                    <div className="text-center">
+                      <div className="text-5xl mb-4">📝</div>
+                      <h2 className="text-2xl font-bold text-gray-800 mb-3">暂无审核历史记录</h2>
+                      <p className="text-gray-600">审核任务后，记录将显示在这里</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {reviewHistory.map((record) => (
+                      <div key={record.id} className={`${cardBaseClass} p-6`}>
+                        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <h3 className="text-xl font-bold text-gray-800">{record.taskTitle}</h3>
+                              <span className={`px-3 py-1 rounded-lg text-sm font-medium ${record.result === "approved"
+                                ? "bg-green-100 text-green-700 border border-green-200"
+                                : "bg-red-100 text-red-700 border border-red-200"}`}>
+                                {record.resultText}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                              <span>处理人：{record.reviewerName}</span>
+                              <span>处理时间：{record.reviewedAt}</span>
+                            </div>
+
+                            {record.reason && (
+                              <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg">
+                                驳回原因：{record.reason}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
 
+        {/* ---------- 任务详情弹窗 ---------- */}
+        <Modal
+          isOpen={showDetailModal && selectedTask !== null}
+          onClose={() => setShowDetailModal(false)}
+          title="任务详情"
+          size="lg"
+        >
+          {selectedTask && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+                <span className={`px-3 py-1 rounded-lg text-sm font-medium ${difficultyStyles[selectedTask.difficulty as TaskDifficulty]}`}>
+                  {selectedTask.difficulty}
+                </span>
+                <span className="px-3 py-1 rounded-lg text-sm font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                  {selectedTask.status}
+                </span>
+                <span className="text-gray-500 text-sm">发布者：{selectedTask.publisher?.name || "未知"}</span>
+              </div>
+
+              <h3 className="text-xl font-bold text-gray-800">{selectedTask.title}</h3>
+
+              <div>
+                <h4 className="text-sm font-semibold text-gray-600 mb-2">任务描述</h4>
+                <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{selectedTask.description}</p>
+              </div>
+
+              {selectedTask.techRequirements && selectedTask.techRequirements.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-600 mb-2">技术需求</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTask.techRequirements.map((tech, index) => (
+                      <span key={index} className="px-3 py-1 bg-amber-50 text-amber-700 rounded-lg text-sm font-medium border border-amber-100">
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
+                <span className="text-2xl">💎</span>
+                <span className="text-2xl font-bold text-amber-600">{selectedTask.reward}</span>
+                <span className="text-gray-500">灵石</span>
+              </div>
+
+              {canReview && (
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => handleApprove(selectedTask.id)}
+                    disabled={actionLoading}
+                    className="flex-1 py-2.5 bg-green-700 text-white font-medium rounded-lg hover:bg-green-800 transition-all disabled:opacity-50"
+                  >
+                    {actionLoading ? "处理中..." : "✓ 审核通过"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDetailModal(false);
+                      handleRejectClick(selectedTask);
+                    }}
+                    disabled={actionLoading}
+                    className="flex-1 py-2.5 bg-red-700 text-white font-medium rounded-lg hover:bg-red-800 transition-all disabled:opacity-50"
+                  >
+                    ✗ 拒绝
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal>
+
         {/* ---------- 拒绝弹窗 ---------- */}
-        {showRejectModal && selectedTask && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div
-              className="rounded-none shadow-2xl border border-gray-300 p-6 w-full max-w-md"
-              style={{ backgroundColor: "#FAF9F7" }}
-            >
-              <h3 className="text-xl font-bold text-gray-800 mb-4">
-                拒绝任务
-              </h3>
-              <p className="text-gray-600 mb-4">
-                请填写拒绝原因（可选）：
-              </p>
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="请输入拒绝原因..."
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-300 rounded-none bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none"
-              />
-              <div className="flex gap-3 mt-6">
+        <Modal
+          isOpen={showRejectModal && selectedTask !== null}
+          onClose={() => setShowRejectModal(false)}
+          title="拒绝任务"
+        >
+          {selectedTask && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg border border-gray-200" style={{ backgroundColor: "#FAF9F7" }}>
+                <p className="text-sm text-gray-600">任务：</p>
+                <p className="font-medium text-gray-800">{selectedTask.title}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">拒绝原因（选填）</label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="请输入拒绝原因..."
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none"
+                />
+              </div>
+              <div className="flex gap-3">
                 <button
                   onClick={() => setShowRejectModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-none hover:bg-gray-300 transition-all"
+                  className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-all"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleConfirmReject}
                   disabled={actionLoading}
-                  className="flex-1 px-4 py-2 bg-red-700 text-white font-medium rounded-none hover:bg-red-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2.5 bg-red-700 text-white font-medium rounded-lg hover:bg-red-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {actionLoading ? "处理中..." : "确认拒绝"}
                 </button>
               </div>
             </div>
+          )}
+        </Modal>
+
+        {/* ---------- Toast 提示 ---------- */}
+        {toast && (
+          <div
+            className={`fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-lg text-white font-medium z-50 ${toast.type === "success" ? "bg-green-700" : "bg-red-700"
+              }`}
+          >
+            {toast.message}
           </div>
         )}
       </div>

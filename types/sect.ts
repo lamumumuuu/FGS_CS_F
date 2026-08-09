@@ -7,10 +7,11 @@ export type SectRole =
   | "太上长老"
   | "荣誉长老"
   | "长老"
-  | "弟子";
+  | "内门弟子"
+  | "外门弟子";
 
 /** 宗门各峰名称 */
-export type SectPeak = "项目峰" | "算法峰" | "电路峰" | "管理台";
+export type SectPeak = string;
 
 /** 弟子公开信息 */
 export interface Disciple {
@@ -21,10 +22,13 @@ export interface Disciple {
   peak: SectPeak;
   avatar?: string;
   joinedAt: string;
+  userId?: number;
+  lingshi?: number;
 }
 
 /** 峰概要信息 */
 export interface PeakInfo {
+  id?: string;
   name: SectPeak;
   description: string;
   leaderId?: string;
@@ -37,22 +41,20 @@ export interface CurrentUser {
   name: string;
   role: SectRole;
   peak: SectPeak;
-  permissions: SectPermission[];
+  permissions: string[];
 }
 
-/** 宗门管理级权限 */
-export type SectPermission =
-  | "manage_permissions"
-  | "move_disciple"
-  | "reward_disciple"
-  | "delete_disciple"
-  | "add_disciple"
-  | "manage_peaks";
+/**
+ * 宗门管理级权限
+ * 使用 module:action 格式（如 member:expel, peak:manage_members）
+ * 具体权限常量定义见 types/permissions.ts
+ */
+export type SectPermission = string;
 
 /** 右键菜单操作项配置 */
 export interface ContextMenuItem {
   label: string;
-  permission?: SectPermission;
+  permission?: string;
   action: string;
   icon?: string;
 }

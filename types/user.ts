@@ -54,6 +54,7 @@ export interface BackendUser {
   createTime?: string;
   updateTime?: string;
   lastLoginTime?: string;
+  lingshi?: number;
 }
 
 /** 用户信息刷新接口响应（不含 token） */

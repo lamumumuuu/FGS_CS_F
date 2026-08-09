@@ -2,19 +2,21 @@
 
 /**
  * 权限上下文模块
- * 
+ *
  * 本文件提供全局的权限状态管理，基于 React Context API 实现。
  * 包含：
  * - PermissionProvider : 权限提供者组件，负责从后端获取用户、角色、权限数据，
  *   并通过 Context 向所有子组件注入权限信息与判断方法。
  * - usePermission      : 自定义 Hook，用于在函数组件中获取权限上下文。
- * 
+ *
  * 核心功能：
  * 1. 初始化时从本地缓存恢复部分权限数据，实现快速渲染；
  * 2. 检测 token 并调用后端接口拉取完整权限数据；
  * 3. 提供 hasPermission、hasRole、hasAnyRole 等权限校验方法；
- * 4. 提供 logout 和 refreshPermissions 等操作。
- * 
+ * 4. 提供 logout 和 refreshPermissions 等操作；
+ * 5. 支持灵石数据实时同步：通过 refreshLingshi 方法可单独刷新灵石数值；
+ *    通过 subscribeToUserData 可订阅用户数据变更事件，一处更新处处同步。
+ *
  * 使用方式：
  * - 在应用根布局中包裹 <PermissionProvider>...</PermissionProvider>
  * - 子组件内通过 const { hasPermission, isAuthenticated } = usePermission(); 获取权限状态
@@ -28,6 +30,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   ReactNode,
   useMemo,
 } from "react";
@@ -52,9 +55,11 @@ interface PermissionContextType {
   hasPermission: (permission: string) => boolean;  /// 判断是否拥有某个权限
   hasRole: (role: string) => boolean;              /// 判断是否拥有某个角色
   hasAnyRole: (...roles: string[]) => boolean;     /// 判断是否拥有任意一个给定角色
-  refreshPermissions: () => Promise<void>;         /// 手动重新拉取权限
+  refreshPermissions: () => Promise<void>;         /// 手动重新拉取权限（含灵石数据）
+  refreshLingshi: () => Promise<void>;            /// 单独刷新灵石数值（轻量级操作）
   logout: () => Promise<void>;                     /// 登出并清除状态
   clearError: () => void;                          /// 清除错误信息
+  subscribeToUserData: (callback: (user: BackendUser | null) => void) => () => void; /// 订阅用户数据变更，返回取消订阅函数
 }
 
 /* ------------------------------------------------------------------ */
@@ -82,6 +87,20 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);    /// 初始为 true，等待权限初始化完成
   const [error, setError] = useState<string | null>(null);
 
+  // 用户数据订阅者列表，用于实现全局数据同步
+  const subscribersRef = useRef<Array<(user: BackendUser | null) => void>>([]);
+
+  /** 通知所有订阅者用户数据变更 */
+  const notifySubscribers = useCallback((u: BackendUser | null) => {
+    subscribersRef.current.forEach((cb) => {
+      try {
+        cb(u);
+      } catch (e) {
+        console.warn("用户数据订阅回调执行失败:", e);
+      }
+    });
+  }, []);
+
   /* ------------------------------------------------------------------ */
   /*  内部工具方法                                                     */
   /* ------------------------------------------------------------------ */
@@ -101,7 +120,8 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     setPeakIds([]);
     setIsGlobal(false);
     setIsAuthenticated(false);
-  }, []);
+    notifySubscribers(null);                        /// 通知订阅者用户已清空
+  }, [notifySubscribers]);
 
   /* ------------------------------------------------------------------ */
   /*  本地缓存恢复 —— 用于页面刷新后快速展示缓存权限，减少白屏       */
@@ -156,6 +176,9 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       setPeakIds(Array.isArray(data.peakIds) ? data.peakIds : DEFAULT_PEAK_IDS);
       setIsGlobal(typeof data.isGlobal === "boolean" ? data.isGlobal : false);
       setIsAuthenticated(true);                    /// 标记认证成功
+
+      // 通知订阅者：用户数据（含灵石）已更新
+      notifySubscribers(data.user);
     } catch (err: unknown) {
       console.error("刷新权限失败:", err);
       resetPermissions();
@@ -165,7 +188,31 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);                           /// 加载结束
     }
-  }, [resetPermissions]);
+  }, [resetPermissions, notifySubscribers]);
+
+  /* ------------------------------------------------------------------ */
+  /*  灵石轻量刷新 —— 仅刷新 user 中的灵石数值，不触发完整权限重载   */
+  /* ------------------------------------------------------------------ */
+  const refreshLingshi = useCallback(async () => {
+    try {
+      const token = userApi.getToken();
+      if (!token) return;
+
+      const data: UserInfoResponse = await userApi.getCurrentUser();
+      if (data && data.user) {
+        // 局部更新 user 对象中的 lingshi 字段，保留其他状态
+        setUser((prev) => {
+          if (!prev) return data.user;
+          // 合并更新，确保灵石及其他可能变动的字段都同步
+          return { ...prev, ...data.user, lingshi: data.user.lingshi };
+        });
+        // 通知订阅者
+        notifySubscribers(data.user);
+      }
+    } catch (err) {
+      console.warn("刷新灵石失败:", err);
+    }
+  }, [notifySubscribers]);
 
   /* ------------------------------------------------------------------ */
   /*  登出流程                                                         */
@@ -187,7 +234,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
 
   /**
    * 检查是否拥有某个权限
-   * @param permission 权限字符串 key，例如 "quest:create_global"
+   * @param permission 权限字符串 key，例如 "quest:publish_global"
    */
   const hasPermission = useCallback(
     (permission: string): boolean => {
@@ -216,6 +263,28 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       return rolesToCheck.some((r) => roleNames.includes(r));
     },
     [roleNames, isAuthenticated]
+  );
+
+  /* ------------------------------------------------------------------ */
+  /*  用户数据订阅 —— 用于实现全局数据同步                            */
+  /* ------------------------------------------------------------------ */
+  const subscribeToUserData = useCallback(
+    (callback: (user: BackendUser | null) => void) => {
+      subscribersRef.current.push(callback);
+      // 立即推送一次当前用户数据，便于订阅者同步初始状态
+      try {
+        callback(user);
+      } catch (e) {
+        console.warn("用户数据初始推送失败:", e);
+      }
+      // 返回取消订阅函数
+      return () => {
+        subscribersRef.current = subscribersRef.current.filter(
+          (cb) => cb !== callback
+        );
+      };
+    },
+    [user]
   );
 
   /* ------------------------------------------------------------------ */
@@ -267,8 +336,10 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       hasRole,
       hasAnyRole,
       refreshPermissions,
+      refreshLingshi,
       logout,
       clearError,
+      subscribeToUserData,
     }),
     [
       user,
@@ -285,8 +356,10 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
       hasRole,
       hasAnyRole,
       refreshPermissions,
+      refreshLingshi,
       logout,
       clearError,
+      subscribeToUserData,
     ]
   );
 

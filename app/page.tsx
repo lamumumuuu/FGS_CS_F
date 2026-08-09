@@ -1,22 +1,12 @@
 // app/page.tsx
-
-/**
- * 首页
- * 
- * 应用首页，展示用户信息（已登录）或引导登录（未登录），
- * 以及任务大厅和宗门事务的入口卡片。
- * 采用米白水墨风格背景设计。
- * 
- * 数据来源：PermissionContext（基于后端 /api/user/me 接口）
- */
-
 "use client";
 
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePermission } from "@/contexts/PermissionContext";
+import { useNavTransition } from "@/hooks/useNavTransition";
 
-// 角色代码 → 中文显示名映射
 const ROLE_DISPLAY_NAMES: Record<string, string> = {
   sect_master: "宗主",
   grand_elder: "大长老",
@@ -27,9 +17,6 @@ const ROLE_DISPLAY_NAMES: Record<string, string> = {
   outer_disciple: "外门弟子",
 };
 
-// 峰ID → 峰名称映射（对应后端 /api/rbac/peaks 返回的数据）
-// 注：如果后端返回的 peak 名称是中文，可以简化；如果是数字ID，需要映射。
-// 这里根据常见约定硬编码，实际可从 peakIds 查询
 const PEAK_NAMES: Record<number, string> = {
   1: "项目峰",
   2: "算法峰",
@@ -37,213 +24,388 @@ const PEAK_NAMES: Record<number, string> = {
   4: "管理台",
 };
 
-/* ------------------------------------------------------------------ */
-/*  页面组件                                                           */
-/* ------------------------------------------------------------------ */
+const ANIM_DURATION = 100; // 毫秒，动画时长
+
 export default function Home() {
   const router = useRouter();
-  const {
-    isAuthenticated,
-    user,
-    roleNames,
-    peakIds,
-    isGlobal,
-    loading,
-  } = usePermission();
+  const { navigate } = useNavTransition();
+  const { isAuthenticated, user, roleNames, peakIds, loading } = usePermission();  // 移除未使用的 isGlobal
 
-  /* ---------- 未认证卡片点击：跳转到登录页 ---------- */
-  function handleUnauthenticatedClick() {
-    router.push("/login");
-  }
+  const [activePanel, setActivePanel] = useState<"task" | "announcement" | null>(null);
+  const [lockedPanel, setLockedPanel] = useState<"task" | "announcement" | null>(null);
+  const [rotation, setRotation] = useState(0);
+  const [animState, setAnimState] = useState<"idle" | "exit" | "enter">("idle");
+  const [animPanel, setAnimPanel] = useState<"task" | "announcement" | null>(null);
 
-  /* ---------- 计算展示用的角色中文名 ---------- */
-  const getRoleDisplayName = (): string => {
+  const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const animTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ===== 将首页纹理背景应用到 body，使导航栏半透明效果可见 =====
+  useEffect(() => {
+    const originalBg = document.body.style.background;
+    const originalBgColor = document.body.style.backgroundColor;
+    const originalBgSize = document.body.style.backgroundSize;
+    const originalBgRepeat = document.body.style.backgroundRepeat;
+    const originalBgBlend = document.body.style.backgroundBlendMode;
+
+    document.body.style.background = `url('/backg.jpg')`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundRepeat = 'repeat';
+    document.body.style.backgroundBlendMode = 'multiply';
+    document.body.style.backgroundColor = '#f4f0e6';
+
+    return () => {
+      document.body.style.background = originalBg;
+      document.body.style.backgroundColor = originalBgColor;
+      document.body.style.backgroundSize = originalBgSize;
+      document.body.style.backgroundRepeat = originalBgRepeat;
+      document.body.style.backgroundBlendMode = originalBgBlend;
+    };
+  }, []);
+
+  // 面板切换动画控制（修复同步 setState 问题）
+  useEffect(() => {
+    if (activePanel === animPanel) return;
+
+    if (animTimerRef.current) clearTimeout(animTimerRef.current);
+
+    // 异步设置退出状态，避免在 effect 中同步 setState
+    Promise.resolve().then(() => setAnimState("exit"));
+    animTimerRef.current = setTimeout(() => {
+      setAnimPanel(activePanel);
+      setAnimState("enter");
+      animTimerRef.current = null;
+    }, ANIM_DURATION);
+    return () => {
+      if (animTimerRef.current) clearTimeout(animTimerRef.current);
+    };
+  }, [activePanel, animPanel]);
+
+  const getRoleDisplayName = useCallback((): string => {
     if (!roleNames || roleNames.length === 0) return "外门弟子";
-    // 取第一个角色，按优先级顺序匹配显示名
     for (const role of roleNames) {
       if (ROLE_DISPLAY_NAMES[role]) return ROLE_DISPLAY_NAMES[role];
     }
-    return roleNames[0]; // 兜底显示原始代码
-  };
+    return roleNames[0];
+  }, [roleNames]);
 
-  /* ---------- 计算展示用的所属峰 ---------- */
-  const getPeakDisplayName = (): string => {
+  const getPeakDisplayName = useCallback((): string => {
     if (!peakIds || peakIds.length === 0) return "无";
-    // 如果有多个峰，取第一个显示；也可以用逗号拼接
-    const firstPeakId = peakIds[0];
-    return PEAK_NAMES[firstPeakId] || `峰 ${firstPeakId}`;
+    return PEAK_NAMES[peakIds[0]] || `峰 ${peakIds[0]}`;
+  }, [peakIds]);
+
+  const lingshi = user?.lingshi ?? 0;
+
+  // 鼠标进入：悬停防抖 50ms，避免快速划过即触发
+  const handleTaskEnter = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      setActivePanel((prev) => {
+        if (prev !== "task") setRotation((r) => r + 360);
+        return "task";
+      });
+    }, 50);
   };
 
-  /* ---------- 灵石数量（暂时用占位，需后端支持） ---------- */
-  // 注：当前 /api/user/me 不返回 lingshi 字段，此处临时使用 0
-  // 待后端扩展字段后，改为 user.lingshi ?? 0
-  const lingshi = 0;
+  const handleAnnouncementEnter = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      setActivePanel((prev) => {
+        if (prev !== "announcement") setRotation((r) => r + 360);
+        return "announcement";
+      });
+    }, 50);
+  };
 
-  /* ------------------------------------------------------------------ */
-  /*  渲染                                                              */
-  /* ------------------------------------------------------------------ */
-  return (
-    <div
-      className="flex-1 py-8 px-4 sm:px-6 lg:px-8 min-h-[calc(100vh-72px)]"
-      style={{
-        backgroundColor: "#F5F3F0",
-        backgroundImage: `
-          radial-gradient(ellipse at top left, rgba(200, 180, 160, 0.1) 0%, transparent 50%),
-          radial-gradient(ellipse at bottom right, rgba(180, 160, 140, 0.08) 0%, transparent 50%),
-          radial-gradient(circle at 20% 80%, rgba(210, 190, 170, 0.06) 0%, transparent 30%)
-        `,
-      }}
-    >
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* ---------- 用户信息区域 ---------- */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-gray-500 text-lg">加载中...</div>
+  // 鼠标离开：清除防抖并立即恢复面板
+  const handleLeave = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    if (animTimerRef.current) {
+      clearTimeout(animTimerRef.current);
+      animTimerRef.current = null;
+    }
+    const target = lockedPanel || null;
+    setActivePanel(target);
+    setAnimPanel(target);
+    setAnimState("enter");
+  };
+
+  // 点击锁定 / 解锁（每次点击都旋转八卦图）
+  const handleTaskClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setRotation((r) => r + 360);
+    if (lockedPanel === "task") {
+      setLockedPanel(null);
+      setActivePanel(null);
+      setAnimPanel(null);
+      setAnimState("enter");
+    } else {
+      setLockedPanel("task");
+      setActivePanel("task");
+      setAnimPanel("task");
+      setAnimState("enter");
+    }
+  };
+
+  const handleAnnouncementClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setRotation((r) => r + 360);
+    if (lockedPanel === "announcement") {
+      setLockedPanel(null);
+      setActivePanel(null);
+      setAnimPanel(null);
+      setAnimState("enter");
+    } else {
+      setLockedPanel("announcement");
+      setActivePanel("announcement");
+      setAnimPanel("announcement");
+      setAnimState("enter");
+    }
+  };
+
+  // 右侧面板内容渲染
+  const renderRightPanel = () => {
+    if (loading) return <div className="text-gray-500 text-lg">加载中...</div>;
+
+    const panelType = animPanel;
+
+    if (panelType === "task") {
+      return (
+        <div className="w-full h-full flex flex-row-reverse items-center justify-center gap-12 p-8">
+          <div className="font-shan writing-mode-vertical-rl text-5xl text-gray-800 tracking-[0.6em] leading-[2.5]">
+            任务大厅
           </div>
-        ) : isAuthenticated && user ? (
-          /* ---------- 已登录：用户信息卡片 ---------- */
-          <Link
-            href="/profile"
-            className="block rounded-none shadow-md border border-gray-300 p-6 hover:shadow-lg hover:border-gray-400 transition-all"
-            style={{ backgroundColor: "#FAF9F7" }}
-          >
-            <div className="flex items-stretch gap-6">
-              {/* 左侧：头像 + 用户信息 */}
-              <div className="flex items-center gap-4 flex-1">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-3xl border border-gray-300 flex-shrink-0">
-                  {user.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.username}
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  ) : (
-                    user.username.charAt(0).toUpperCase()
-                  )}
-                </div>
-                <div className="flex flex-col">
-                  <h2 className="text-xl font-bold text-gray-800">{user.username}</h2>
-                  <p className="text-sm text-gray-600">
-                    角色：{getRoleDisplayName()}
-                    {isGlobal && (
-                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 border border-amber-300">
-                        全局
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    所属峰：{getPeakDisplayName()}
-                  </p>
-                </div>
-              </div>
-
-              {/* 右侧：灵石数量（正方形） */}
-              <div className="flex-shrink-0 w-20 h-20 bg-amber-50 border-2 border-amber-200 flex flex-col items-center justify-center">
-                <span className="text-xl">💎</span>
-                <span className="text-xl font-bold text-amber-700">
-                  {lingshi}
-                </span>
-              </div>
-            </div>
-
-            {/* 底部：上次登录时间 */}
-            <div className="mt-4 pt-4 border-t border-gray-200 text-sm text-gray-500">
-              上次登录：
-              <span className="font-medium text-gray-700">
-                {user.lastLoginTime
-                  ? new Date(user.lastLoginTime).toLocaleString()
-                  : "首次登录"}
-              </span>
-            </div>
-          </Link>
-        ) : (
-          /* ---------- 未登录：占位卡片，点击跳转登录 ---------- */
-          <div
-            onClick={handleUnauthenticatedClick}
-            className="block rounded-none shadow-md border border-dashed border-gray-400 p-6 hover:shadow-lg hover:border-gray-600 transition-all cursor-pointer"
-            style={{ backgroundColor: "#FAF9F7" }}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-3xl border border-dashed border-gray-400">
-                  👤
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-500">访客道友</h2>
-                  <p className="text-sm text-gray-400 mt-1">
-                    登录后查看个人信息
-                  </p>
-                </div>
-              </div>
-              <div className="px-4 py-2 bg-gray-200 text-gray-600 rounded-none font-medium text-sm">
-                未登录
-              </div>
-            </div>
-            <div className="flex items-end justify-between pt-4 border-t border-dashed border-gray-300">
-              <div className="text-sm text-gray-400">
-                点击登录 / 注册，开启修仙之旅
-              </div>
-              <div className="flex items-center gap-1 text-gray-400">
-                <span className="text-xl">💎</span>
-                <span className="font-bold text-xl">--</span>
-                <span className="text-sm">灵石</span>
-              </div>
-            </div>
+          <div className="writing-mode-vertical-rl text-xl text-gray-600 leading-relaxed tracking-[0.9em]">
+            悬赏历练&nbsp;积累灵石
           </div>
-        )}
-
-        {/* ---------- 功能入口卡片 ---------- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* ---------- 任务大厅 ---------- */}
           <Link
             href="/task-hall"
-            className="group rounded-none shadow-md border border-gray-300 p-8 hover:shadow-xl hover:border-gray-500 hover:-translate-y-1 transition-all cursor-pointer"
-            style={{ backgroundColor: "#FAF9F7" }}
+            onClick={(e) => { e.preventDefault(); navigate("/task-hall"); }}
+            className="writing-mode-vertical-rl px-9 py-2 bg-transparent text-red-600 font-bold text-3xl tracking-[0.9em] transition-colors hover:text-red-700"
           >
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-5 bg-amber-100 rounded-none flex items-center justify-center text-4xl shadow-sm group-hover:scale-110 transition-transform border border-amber-200">
-                ⚔️
-              </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-3">任务大厅</h2>
-              <p className="text-gray-600 leading-relaxed">
-                浏览悬赏令，接受各种委托任务，积累灵石与声望，成为传奇勇者
-              </p>
-              <div className="mt-5 inline-flex items-center gap-1 text-amber-700 font-medium group-hover:gap-2 transition-all">
-                <span>进入大厅</span>
-                <span>→</span>
-              </div>
-            </div>
-          </Link>
-
-          {/* ---------- 宗门事务 ---------- */}
-          <Link
-            href="/sect-affairs"
-            className="group rounded-none shadow-md border border-gray-300 p-8 hover:shadow-xl hover:border-gray-500 hover:-translate-y-1 transition-all cursor-pointer"
-            style={{ backgroundColor: "#FAF9F7" }}
-          >
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-5 bg-purple-100 rounded-none flex items-center justify-center text-4xl shadow-sm group-hover:scale-110 transition-transform border border-purple-200">
-                🏛️
-              </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-3">宗门事务</h2>
-              <p className="text-gray-600 leading-relaxed">
-                管理宗门弟子名册，查看各峰实力分布，处理宗门日常事务
-              </p>
-              <div className="mt-5 inline-flex items-center gap-1 text-purple-700 font-medium group-hover:gap-2 transition-all">
-                <span>进入宗门</span>
-                <span>→</span>
-              </div>
-            </div>
+            进入大厅
           </Link>
         </div>
+      );
+    }
 
-        {/* ---------- 底部装饰：水墨风格 ---------- */}
-        <div className="mt-12 text-center">
-          <div className="inline-block text-gray-400 text-sm">
-            —— 道阻且长，行则将至 ——
+    if (panelType === "announcement") {
+      return (
+        <div className="w-full h-full flex flex-row-reverse items-center justify-center gap-12 p-8">
+          <div className="font-shan writing-mode-vertical-rl text-5xl text-gray-800 tracking-[0.6em] leading-[2.5]">
+            公告栏
+          </div>
+          <div className="writing-mode-vertical-rl text-xl text-gray-600 leading-relaxed tracking-[0.9em]">
+            宗门公告&nbsp;活动动态
+          </div>
+          <Link
+            href="/announcement"
+            onClick={(e) => { e.preventDefault(); navigate("/announcement"); }}
+            className="writing-mode-vertical-rl px-9 py-2 bg-transparent text-red-600 font-bold text-3xl tracking-[0.9em] transition-colors hover:text-red-700"
+          >
+            查看公告
+          </Link>
+        </div>
+      );
+    }
+
+    // 个人信息（默认）
+    if (isAuthenticated && user) {
+      return (
+        <div className="w-full h-full flex flex-row-reverse items-center justify-center gap-6 p-8">
+          <div className="writing-mode-vertical-rl text-5xl font-shan text-gray-800 tracking-[0.4em] leading-[2.5]">
+            {user.username}
+          </div>
+          <div className="writing-mode-vertical-rl text-xl text-gray-600 tracking-[0.25em] leading-loose flex flex-col items-start gap-2">
+            <span>角色&nbsp;{getRoleDisplayName()}</span>
+            <span>属峰&nbsp;{getPeakDisplayName()}</span>
+            <span>灵石 {lingshi} </span>
+          </div>
+          <Link
+            href="/profile"
+            onClick={(e) => { e.preventDefault(); navigate("/profile"); }}
+            className="writing-mode-vertical-rl px-9 py-2 bg-transparent text-red-600 font-bold text-3xl tracking-[0.9em] transition-colors hover:text-red-700"
+          >
+            个人中心
+          </Link>
+        </div>
+      );
+    }
+
+    // 未登录
+    return (
+      <div
+        onClick={() => navigate("/auth")}
+        className="w-full h-full flex flex-row-reverse items-center justify-center gap-12 p-8 cursor-pointer"
+      >
+        <div className="writing-mode-vertical-rl text-5xl font-shan text-gray-900 tracking-[0.4em] leading-[2.5]">
+          访客
+        </div>
+        <div className="writing-mode-vertical-rl text-xl text-gray-600 tracking-[0.3em]">
+          登录后查看个人信息
+        </div>
+      </div>
+    );
+  };
+
+  const panelAnimClass =
+    animState === "exit"
+      ? "animate-slide-out-bottom"
+      : animState === "enter"
+        ? "animate-slide-in-from-top"
+        : "";
+
+  return (
+    <div
+      className="h-screen flex overflow-hidden"
+      style={{
+        backgroundColor: "#f4f0e6",
+        backgroundImage: `url('/backg.jpg')`,
+        backgroundSize: "cover",
+        backgroundRepeat: "repeat",
+        backgroundBlendMode: "multiply",
+      }}
+    >
+      {/* 左侧：太极八卦区 */}
+      <div
+        className="relative flex-shrink-0"
+        style={{
+          width: "min(calc(100vh - 80px), 30vw)",
+          height: "100vh",
+          marginLeft: "200px",
+          pointerEvents: "none",
+        }}
+      >
+        {/* 新版八卦图（增加阴影和缓动） */}
+        <div
+          className="absolute inset-0 transition-transform ease-in-out pointer-events-none"
+          style={{
+            transform: `rotate(${rotation}deg) `,
+            transition: `transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) `,
+            filter: "drop-shadow(0 0 8px rgba(0,0,0,0.1)) drop-shadow(0 0 4px rgba(255,255,255,0.4))",
+          }}
+        >
+          <svg className="w-full h-full" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <filter id="ink-blur">
+                <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" result="noise" />
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+              </filter>
+              <line id="solid-line" x1="-20" y1="0" x2="20" y2="0" stroke="#5a5750" strokeWidth="3" strokeLinecap="round" />
+              <g id="broken-line">
+                <line x1="-20" y1="0" x2="-5" y2="0" stroke="#5a5750" strokeWidth="3" strokeLinecap="round" />
+                <line x1="5" y1="0" x2="20" y2="0" stroke="#5a5750 " strokeWidth="3" strokeLinecap="round" />
+              </g>
+            </defs>
+
+            <circle cx="200" cy="200" r="190" fill="none" stroke="rgba(0, 0, 0, 0)" strokeWidth="1" />
+
+            <path d="M200,10 A190,190 0 0,0 200,390 A95,95 0 0,1 200,200 A95,95 0 0,0 200,10 Z" fill="rgba(5, 5, 5, 0.5)" filter="url(#ink-blur)" />
+            <path d="M200,10 A190,190 0 0,1 200,390 A95,95 0 0,0 200,200 A95,95 0 0,1 200,10 Z" fill="rgb(225, 218, 200)" filter="url(#ink-blur)" transform="scale(1, -1) translate(0, -400)" />
+
+            <circle cx="200" cy="105" r="18" fill="rgb(225, 218, 200)" className="animate-breathe-slow" />
+            <circle cx="200" cy="105" r="6" fill="rgba(84,27,27,0)" />
+            <circle cx="200" cy="295" r="18" fill="rgba(0, 0, 0, 0.7)" className="animate-breathe-slow" style={{ animationDelay: "2s" }} />
+            <circle cx="200" cy="295" r="6" fill="rgba(255, 255, 255, 0)" />
+
+            <g transform="translate(200,200)">
+              <g transform="translate(0,-160)"><use href="#solid-line" y="-12" /><use href="#solid-line" y="0" /><use href="#solid-line" y="12" /></g>
+              <g transform="translate(0,160) rotate(180)"><use href="#solid-line" y="-12" /><use href="#solid-line" y="0" /><use href="#solid-line" y="12" /></g>
+              <g transform="translate(-160,0) rotate(-90)"><use href="#solid-line" y="-12" /><use href="#broken-line" y="0" /><use href="#solid-line" y="12" /></g>
+              <g transform="translate(160,0) rotate(90)"><use href="#broken-line" y="-12" /><use href="#solid-line" y="0" /><use href="#broken-line" y="12" /></g>
+              <g transform="translate(-113,-113) rotate(-45)"><use href="#broken-line" y="-12" /><use href="#solid-line" y="0" /><use href="#solid-line" y="12" /></g>
+              <g transform="translate(113,-113) rotate(45)"><use href="#solid-line" y="-12" /><use href="#solid-line" y="0" /><use href="#broken-line" y="12" /></g>
+              <g transform="translate(-113,113) rotate(-135)"><use href="#broken-line" y="-12" /><use href="#broken-line" y="0" /><use href="#solid-line" y="12" /></g>
+              <g transform="translate(113,113) rotate(135)"><use href="#solid-line" y="-12" /><use href="#broken-line" y="0" /><use href="#broken-line" y="12" /></g>
+            </g>
+
+            <circle cx="200" cy="200" r="50" fill="none" stroke="rgba(0,0,0,0.03)" strokeWidth="1" strokeDasharray="4 4" />
+          </svg>
+        </div>
+
+        {/* 左侧触发区：任务大厅 */}
+        <div
+          className="absolute left-0 top-0 h-full w-1/2 cursor-pointer opacity-0 transition-opacity duration-100 hover:opacity-100"
+          style={{
+            borderRadius: "50% 0 0 50%",
+            pointerEvents: "auto",
+          }}
+          onMouseEnter={handleTaskEnter}
+          onMouseLeave={handleLeave}
+          onClick={handleTaskClick}
+        >
+          <div className="flex h-full flex-col items-center justify-center p-8 opacity-0 transition-all duration-100 hover:opacity-100">
+            <div className="text-center">
+              <h2 className="mb-2 font-zhim text-4xl text-gray-700">任务大厅</h2>
+              <p className="text-sm font-shan text-gray-600">悬赏历练 · 积累灵石</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧触发区：公告栏 */}
+        <div
+          className="absolute right-0 top-0 h-full w-1/2 cursor-pointer opacity-0 transition-opacity duration-100 hover:opacity-100"
+          style={{
+            borderRadius: "0 50% 50% 0",
+            pointerEvents: "auto",
+          }}
+          onMouseEnter={handleAnnouncementEnter}
+          onMouseLeave={handleLeave}
+          onClick={handleAnnouncementClick}
+        >
+          <div className="flex h-full flex-col items-center justify-center p-8 opacity-0 transition-all duration-100 hover:opacity-100">
+            <div className="text-center">
+              <h2 className="mb-2 font-zhim text-4xl text-emerald-800">公告栏</h2>
+              <p className="text-sm font-shan text-gray-600">宗门公告 · 活动动态</p>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* 右侧：卷轴面板 */}
+      <div className="flex-1 relative font-shan overflow-hidden">
+        <div
+          className={`absolute inset-0 flex items-center justify-center ${panelAnimClass}`}
+          key={animPanel ?? "default"}
+        >
+          {renderRightPanel()}
+        </div>
+      </div>
+
+      <div className="fixed bottom-6 right-100 z-10 text-gray-600 text-xl font-shan">
+        —— 道阻且长，行则将至 ——
+      </div>
+
+      {/* 全局样式（新版动画定义） */}
+      <style>{`
+        @keyframes bgFlow {
+          0% { background-position: 0% 0%; }
+          100% { background-position: 2% 2%; }
+        }
+        @keyframes floatA {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.08; }
+          25% { transform: translate(20px, -15px) scale(1.02); opacity: 0.12; }
+          50% { transform: translate(-10px, 25px) scale(0.98); opacity: 0.06; }
+          75% { transform: translate(-25px, -10px) scale(1.01); opacity: 0.1; }
+        }
+        @keyframes floatB {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.06; }
+          33% { transform: translate(-15px, 20px) scale(0.99); opacity: 0.09; }
+          66% { transform: translate(25px, -20px) scale(1.01); opacity: 0.05; }
+        }
+        @keyframes floatC {
+          0%, 100% { transform: translate(0, 0); opacity: 0.05; }
+          50% { transform: translate(30px, -25px); opacity: 0.1; }
+        }
+        .animate-float-a { animation: floatA 18s ease-in-out infinite; }
+        .animate-float-b { animation: floatB 22s ease-in-out infinite; }
+        .animate-float-c { animation: floatC 15s ease-in-out infinite; }
+      `}</style>
     </div>
   );
 }

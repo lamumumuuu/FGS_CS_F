@@ -8,6 +8,20 @@
 /* 引入 Tailwind 的基础样式、组件样式和工具类 */
 @import "tailwindcss";
 
+/* ===== 字体声明 ===== */
+@font-face {
+  font-family: 'MaShanZheng';
+  src: url('/fonts/mashanzheng/ma-shan-zheng-chinese-simplified-400-normal.woff2') format('woff2'); /* 使用全量字体，确保覆盖所有字符 */
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'zhimangxing';
+  src: url('/fonts/zhimangxing/zhi-mang-xing-chinese-simplified-400-normal.woff2') format('woff2'); /* 使用全量字体，确保覆盖所有字符 */
+  font-weight: 400;
+  font-style: normal;
+}
+
 /* 根级 CSS 变量，定义亮色主题背景与文字色 */
 :root {
   --background: #ffffff;    /* 亮色背景 */
@@ -20,6 +34,9 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-shan: 'MaShanZheng', sans-serif;
+    --font-zhim: 'zhimangxing', sans-serif;
+
 }
 
 /* 跟随系统偏好自动切换暗色模式 */
@@ -35,4 +52,130 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ===== 全局滚动条隐藏 ===== */
+html,
+body,
+#__next,
+main,
+section,
+div {
+  scrollbar-width: none;           /* Firefox */
+  -ms-overflow-style: none;        /* IE/Edge 旧版 */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#__next::-webkit-scrollbar,
+main::-webkit-scrollbar,
+section::-webkit-scrollbar,
+div::-webkit-scrollbar {
+  display: none;                   /* Chrome/Safari/Edge */
+  width: 0;
+  height: 0;
+}
+
+
+/* 宣纸纹理背景 */
+.xuan-paper {
+  /* 基础纸色：暖米白 */
+  background-color: #f7f4eb;
+  
+  /* 横向纤维纹理（细密水平线条） */
+  background-image:
+    /* 不规则斑点：两种相近颜色，随机位置和大小，边缘模糊 */
+    radial-gradient(circle at 15% 30%, rgba(200, 185, 155, 0.3) 0%, transparent 40%),
+    radial-gradient(circle at 85% 70%, rgba(215, 200, 170, 0.35) 0%, transparent 45%),
+    radial-gradient(circle at 40% 85%, rgba(195, 180, 150, 0.25) 0%, transparent 35%),
+    radial-gradient(circle at 70% 15%, rgba(210, 195, 165, 0.3) 0%, transparent 40%),
+    radial-gradient(circle at 10% 65%, rgba(205, 188, 158, 0.3) 0%, transparent 42%),
+    radial-gradient(circle at 90% 45%, rgba(218, 203, 173, 0.25) 0%, transparent 38%),
+    radial-gradient(circle at 50% 50%, rgba(200, 185, 155, 0.2) 0%, transparent 55%),
+    
+    /* 横向纤维纹理：使用重复线性渐变模拟长纤维线条 */
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 2px,
+      rgba(180, 160, 130, 0.2) 2px,
+      rgba(180, 160, 130, 0.2) 3px
+    );
+}
+
+/* 可选：暗色模式调整 */
+@media (prefers-color-scheme: dark) {
+  .xuan-paper {
+    background-color: #2c2c2c;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(80, 70, 60, 0.25) 0%, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(90, 80, 70, 0.3) 0%, transparent 45%),
+      radial-gradient(circle at 40% 80%, rgba(70, 60, 50, 0.2) 0%, transparent 35%),
+      radial-gradient(circle at 70% 20%, rgba(85, 75, 65, 0.25) 0%, transparent 40%),
+      radial-gradient(circle at 10% 60%, rgba(75, 65, 55, 0.25) 0%, transparent 42%),
+      radial-gradient(circle at 90% 50%, rgba(80, 70, 60, 0.2) 0%, transparent 38%),
+      radial-gradient(circle at 50% 50%, rgba(75, 65, 55, 0.15) 0%, transparent 55%),
+      repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(100, 90, 80, 0.1) 2px,
+        rgba(100, 90, 80, 0.1) 3px
+      );
+  }
+}
+
+
+
+
+
+
+
+
+
+
+/* 竖排文字 */
+.writing-mode-vertical-rl {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+/* 鱼眼呼吸动画 */
+@keyframes breathe {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+.animate-breathe-slow {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* 面板切换动画（极速） */
+@keyframes slide-out-bottom {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes slide-in-from-top {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-out-bottom {
+  animation: slide-out-bottom 0.1s ease-in-out forwards;
+}
+
+.animate-slide-in-from-top {
+  animation: slide-in-from-top 0.1s ease-in-out forwards;
 }

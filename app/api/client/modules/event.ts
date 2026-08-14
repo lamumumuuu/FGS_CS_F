@@ -20,6 +20,8 @@ export interface Event {
   type: "global" | "peak";
   status: "planned" | "ongoing" | "completed" | "cancelled";
   maxParticipants?: number;
+  /** 已参加人数（后端动态填充） */
+  participantCount?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -67,4 +69,12 @@ export const eventApi = {
   /** 获取我的活动 */
   getMy: () =>
     request<Event[]>("/events/my", undefined, true),
+
+  /** 加入活动 */
+  join: (id: number) =>
+    request<void>(`/events/${id}/join`, { method: "POST" }, true),
+
+  /** 结束活动 */
+  end: (id: number) =>
+    request<void>(`/events/${id}/end`, { method: "PUT" }, true),
 };

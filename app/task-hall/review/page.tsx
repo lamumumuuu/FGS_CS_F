@@ -6,9 +6,9 @@
  * 仅对拥有 quest:review 权限的用户可见，用于审核待发布的悬赏任务。
  * 卡片设计沿用 TaskCard 的风格：双色渐变背景、圆角、悬停发光。
  * 功能：
- * - 查看待审核任务列表
+ * - 发布审核：查看待审核任务列表（状态为"审核中"），审核通过 / 拒绝任务
+ * - 成果核查：查看已提交成果的任务（状态为"讨伐中"且已有完成者），验收通过
  * - 查看任务详情
- * - 审核通过 / 拒绝任务（可填写驳回原因）
  * - 查看审核历史记录
  */
 
@@ -61,7 +61,13 @@ export default function TaskReview() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const [activeTab, setActiveTab] = useState<"pending" | "history">("pending");
+  // Tab 类型：publish=发布审核，verify=成果核查，history=审核历史记录
+  const [activeTab, setActiveTab] = useState<"publish" | "verify" | "history">("publish");
+
+  // 成果核查相关状态
+  const [verifyTasks, setVerifyTasks] = useState<Task[]>([]);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
 
   const showToastMessage = (message: string, type: "success" | "error") => {
     setToast({ message, type });
@@ -191,6 +197,49 @@ export default function TaskReview() {
     }
   }
 
+  /**
+   * 加载待核查成果列表
+   * 筛选条件：状态为"已提交"的任务
+   * 这些任务是勇者已接取并提交成果、等待核查验收
+   */
+  async function fetchVerifyTasks() {
+    setVerifyLoading(true);
+    setVerifyError("");
+    try {
+      const data = await taskApi.getTasks({ status: "已提交" });
+      setVerifyTasks(data || []);
+    } catch (err) {
+      console.error("Failed to load verify tasks:", err);
+      setVerifyError(err instanceof Error ? err.message : "加载失败");
+    } finally {
+      setVerifyLoading(false);
+    }
+  }
+
+  /**
+   * 验收通过：调用 completeTask API 完成任务验收
+   * 验收通过后奖励发放给完成者，任务状态变为"已完成"
+   */
+  async function handleComplete(taskId: string) {
+    // 前端权限校验：核查验收需要 QUEST_PERMISSIONS.REVIEW
+    if (!hasPermission(QUEST_PERMISSIONS.REVIEW)) {
+      showToastMessage("您没有核查任务的权限", "error");
+      return;
+    }
+    if (!confirm("确定验收通过吗？通过后奖励将发放给完成者。")) return;
+
+    setActionLoading(true);
+    try {
+      await taskApi.completeTask(taskId);
+      setVerifyTasks((prev) => prev.filter((t) => t.id !== taskId));
+      showToastMessage("任务验收通过，奖励已发放给完成者", "success");
+    } catch (err) {
+      showToastMessage(err instanceof Error ? err.message : "验收失败", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   function handleViewDetail(task: Task) {
     setSelectedTask(task);
     setShowDetailModal(true);
@@ -243,9 +292,9 @@ export default function TaskReview() {
             审核待发布的悬赏任务，维护宗门秩序
           </p>
           {canReview && (
-            <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 rounded-lg text-white text-sm">
-              <span>📊</span>
-              <span>待审核：{tasks.length} 条</span>
+            <div className="mt-3 inline-flex items-center gap-4 px-4 py-1.5 bg-white/10 rounded-lg text-white text-sm">
+              <span>📊 待审核：{tasks.length} 条</span>
+              <span>🔍 待核查：{verifyTasks.length} 条</span>
             </div>
           )}
         </div>
@@ -280,13 +329,25 @@ export default function TaskReview() {
             {/* ---------- Tab 切换 ---------- */}
             <div className="flex mb-6 border-b border-white/20">
               <button
-                onClick={() => setActiveTab("pending")}
-                className={`flex-1 px-6 py-3 font-medium text-center transition-colors ${activeTab === "pending"
+                onClick={() => setActiveTab("publish")}
+                className={`flex-1 px-6 py-3 font-medium text-center transition-colors ${activeTab === "publish"
                   ? "text-white border-b-2 border-white"
                   : "text-gray-300 hover:text-white"
                   }`}
               >
-                ⏳ 待审核任务
+                ⏳ 发布审核
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab("verify");
+                  fetchVerifyTasks();
+                }}
+                className={`flex-1 px-6 py-3 font-medium text-center transition-colors ${activeTab === "verify"
+                  ? "text-white border-b-2 border-white"
+                  : "text-gray-300 hover:text-white"
+                  }`}
+              >
+                🔍 成果核查
               </button>
               <button
                 onClick={() => {
@@ -302,8 +363,8 @@ export default function TaskReview() {
               </button>
             </div>
 
-            {/* ---------- 待审核任务列表 ---------- */}
-            {activeTab === "pending" && (
+            {/* ---------- 发布审核：待审核任务列表 ---------- */}
+            {activeTab === "publish" && (
               <>
                 {loading ? (
                   <div className="flex justify-center items-center py-20">
@@ -368,6 +429,108 @@ export default function TaskReview() {
                               className="px-5 py-2 bg-red-700 text-white font-medium rounded-lg hover:bg-red-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               ✗ 拒绝
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ---------- 成果核查：待核查成果列表 ---------- */}
+            {activeTab === "verify" && (
+              <>
+                {verifyError && (
+                  <div className="rounded-lg border border-red-300 p-4 mb-6 bg-red-50">
+                    <p className="text-red-600">{verifyError}</p>
+                  </div>
+                )}
+                {verifyLoading ? (
+                  <div className="flex justify-center items-center py-20">
+                    <div className="text-white text-lg">加载中...</div>
+                  </div>
+                ) : verifyTasks.length === 0 ? (
+                  <div className={`${cardBaseClass} p-12`}>
+                    <div className="text-center">
+                      <div className="text-5xl mb-4">🔍</div>
+                      <h2 className="text-2xl font-bold text-gray-800 mb-3">暂无待核查成果</h2>
+                      <p className="text-gray-600">所有已提交的成果都已核查完毕</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {verifyTasks.map((task) => (
+                      <div key={task.id} className={`${cardBaseClass} p-6`}>
+                        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <h3 className="text-xl font-bold text-gray-800">
+                                {task.title}
+                              </h3>
+                              <span className={`px-3 py-1 rounded-lg text-sm font-medium ${difficultyStyles[task.difficulty as TaskDifficulty]}`}>
+                                {task.difficulty}
+                              </span>
+                              <span className="px-3 py-1 rounded-lg text-sm font-medium bg-red-100 text-red-700 border border-red-200">
+                                已提交
+                              </span>
+                            </div>
+
+                            {/* 完成者信息 */}
+                            <div className="mb-3 flex items-center gap-2 text-sm text-gray-600">
+                              <span>完成者：</span>
+                              <span className="font-medium text-gray-800">
+                                {task.completer?.name || "未知"}
+                              </span>
+                            </div>
+
+                            {/* 提交成果描述 */}
+                            {task.submissionDescription ? (
+                              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                <p className="text-xs font-semibold text-gray-600 mb-1">📝 提交描述：</p>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                  {task.submissionDescription}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                <p className="text-sm text-gray-500 italic">勇者尚未提交成果描述</p>
+                              </div>
+                            )}
+
+                            {/* 附件链接 */}
+                            {task.attachmentUrl && (
+                              <div className="mb-3 text-sm text-gray-600">
+                                <span>附件：</span>
+                                <a
+                                  href={task.attachmentUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline break-all"
+                                >
+                                  {task.attachmentUrl}
+                                </a>
+                              </div>
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                              <span className="flex items-center gap-1">
+                                💎 <span className="font-medium text-amber-700">{task.reward}</span> 灵石
+                              </span>
+                              <span>发布者：{task.publisher?.name || "未知"}</span>
+                              <span>{task.createdAt}</span>
+                            </div>
+                          </div>
+
+                          {/* 验收操作按钮 */}
+                          <div className="flex gap-3 flex-shrink-0">
+                            <button
+                              onClick={() => handleComplete(task.id)}
+                              disabled={actionLoading}
+                              className="px-5 py-2 bg-green-700 text-white font-medium rounded-lg hover:bg-green-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              ✓ 验收通过
                             </button>
                           </div>
                         </div>

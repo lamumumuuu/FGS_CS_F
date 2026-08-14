@@ -148,6 +148,81 @@ export default function Calculator() {
   };
 
   /* ------------------------------------------------------------------ */
+  /*  键盘输入支持（仅在计算器展开状态下生效）                          */
+  /* ------------------------------------------------------------------ */
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 当焦点在 input/textarea/select/contenteditable 中时，不响应计算器键盘事件（避免冲突）
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      const key = e.key;
+
+      // 数字键 0-9 → 输入对应数字
+      if (/^[0-9]$/.test(key)) {
+        e.preventDefault();
+        inputDigit(key);
+        return;
+      }
+
+      // 小数点
+      if (key === ".") {
+        e.preventDefault();
+        inputDot();
+        return;
+      }
+
+      // 运算符 + - * /
+      if (key === "+" || key === "-" || key === "*" || key === "/") {
+        e.preventDefault();
+        performOperation(key);
+        return;
+      }
+
+      // Enter 或 = → 执行计算
+      if (key === "Enter" || key === "=") {
+        e.preventDefault();
+        performOperation("=");
+        return;
+      }
+
+      // Escape → 清空
+      if (key === "Escape") {
+        e.preventDefault();
+        clearAll();
+        return;
+      }
+
+      // Backspace → 退格
+      if (key === "Backspace") {
+        e.preventDefault();
+        backspace();
+        return;
+      }
+
+      // 百分号
+      if (key === "%") {
+        e.preventDefault();
+        percent();
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, display, previousValue, operator, waitingForNewInput]);
+
+  /* ------------------------------------------------------------------ */
   /*  拖拽逻辑                                                          */
   /* ------------------------------------------------------------------ */
 

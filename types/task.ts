@@ -4,7 +4,7 @@
 export type TaskDifficulty = "黑铁" | "青铜" | "白银" | "黄金";
 
 /** 任务生命周期状态 */
-export type TaskStatus = "审核中" | "等待中" | "讨伐中" | "已完成" | "已驳回";
+export type TaskStatus = "审核中" | "等待中" | "讨伐中" | "已提交" | "已完成" | "已驳回";
 
 /** 发布者简要信息 */
 export interface TaskPublisher {
@@ -42,6 +42,10 @@ export interface Task {
   publisherAvatar?: string;
   completerName?: string;
   completerAvatar?: string;
+  /** 提交成果描述（勇者提交悬赏时填写的描述） */
+  submissionDescription?: string;
+  /** 提交成果附件链接（勇者提交悬赏时填写的附件URL） */
+  attachmentUrl?: string;
 }
 
 /** 任务列表筛选条件 */

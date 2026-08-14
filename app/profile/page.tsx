@@ -7,6 +7,9 @@
  * 以及两个功能 Tab（我的征途、我发布的悬赏）。
  * 未登录时自动跳转到登录页。
  * 采用米白色系设计风格，与整体 UI 保持一致。
+ *
+ * 数据来源：角色和峰信息统一来自 PermissionContext 全局状态（与 Navbar 一致），
+ * 通过 PermissionAutoRefresh 自动刷新，确保与其他页面全局同步。
  */
 
 "use client";
@@ -17,30 +20,23 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useNavTransition } from "@/hooks/useNavTransition";
-import { taskApi } from "@/app/api/client";
+import { taskApi, rbacApi } from "@/app/api/client";
 import { Task } from "@/types/task";
 import { BackendUser } from "@/types/user";
+import { Peak } from "@/types/rbac";
 
 /** 可切换的标签页类型 */
 type TabType = "journey" | "published";
 
-// 角色代码 → 中文显示名映射
-const ROLE_DISPLAY_NAMES: Record<string, string> = {
+/** 角色名 → 中文展示名映射（兜底，优先使用后端返回的 displayName） */
+const ROLE_DISPLAY: Record<string, string> = {
   sect_master: "宗主",
   grand_elder: "大长老",
   supreme_elder: "太上长老",
-  honorary_elder: "荣誉长老",
+  honor_elder: "名誉长老",
   elder: "长老",
   inner_disciple: "内门弟子",
   outer_disciple: "外门弟子",
-};
-
-// 峰ID → 峰名称映射
-const PEAK_NAMES: Record<number, string> = {
-  1: "项目峰",
-  2: "算法峰",
-  3: "电路峰",
-  4: "管理台",
 };
 
 // 难度显示配置
@@ -56,6 +52,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   "审核中": { label: "审核中", color: "text-blue-600", bg: "bg-blue-50" },
   "等待中": { label: "等待中", color: "text-green-600", bg: "bg-green-50" },
   "讨伐中": { label: "讨伐中", color: "text-orange-600", bg: "bg-orange-50" },
+  "已提交": { label: "已提交", color: "text-amber-600", bg: "bg-amber-50" },
   "已完成": { label: "已完成", color: "text-gray-600", bg: "bg-gray-100" },
   "已驳回": { label: "已驳回", color: "text-red-600", bg: "bg-red-50" },
 };
@@ -68,12 +65,13 @@ export default function Profile() {
   const { navigate } = useNavTransition();
   const {
     user,
+    roles,
+    peakIds,
     isAuthenticated,
     loading,
-    roleNames,
-    peakIds,
     isGlobal,
     subscribeToUserData,
+    refreshPermissions,
   } = usePermission();
 
   const [activeTab, setActiveTab] = useState<TabType>("journey");
@@ -82,6 +80,8 @@ export default function Profile() {
   const [journeyLoading, setJourneyLoading] = useState(false);
   const [publishedLoading, setPublishedLoading] = useState(false);
   const [lingshi, setLingshi] = useState<number>(0);
+  // 峰列表缓存（用于将 peakIds 映射为峰名称，与 Navbar 保持一致的全局数据源）
+  const [peaks, setPeaks] = useState<Peak[]>([]);
 
   /* ---------- 未登录自动跳转 ---------- */
   useEffect(() => {
@@ -106,12 +106,24 @@ export default function Profile() {
     return unsubscribe;
   }, [isAuthenticated, user, subscribeToUserData]);
 
-  /* ---------- 页面进入时自动刷新权限，确保角色信息最新 ---------- */
+  /* ---------- 进入个人主页时：
+   * 1. 刷新 PermissionContext，确保权限/角色/峰信息最新（统一数据更新机制）
+   * 2. 加载峰列表，用于将 peakIds 映射为峰名称（与 Navbar 一致的数据源）
+   * 3. 加载征途和发布记录
+   * 角色和峰信息统一来自 PermissionContext 全局状态，确保与其他页面全局同步 ---------- */
   useEffect(() => {
-    if (isAuthenticated) {
-      loadJourneyTasks();
-      loadPublishedTasks();
-    }
+    if (!isAuthenticated) return;
+
+    // 加载峰列表（用于 peakIds → 峰名称映射，与 Navbar 保持一致的全局数据源）
+    rbacApi.getAllPeaks()
+      .then((data) => setPeaks(data || []))
+      .catch((err) => console.warn("加载峰列表失败:", err));
+
+    // 并行执行：刷新权限 + 加载任务列表
+    refreshPermissions().catch(console.error);
+    loadJourneyTasks();
+    loadPublishedTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   /* ---------- 加载我的征途（已完成任务） ---------- */
@@ -156,17 +168,29 @@ export default function Profile() {
     return null;
   }
 
-  /* ---------- 计算展示用数据 ---------- */
+  /* ---------- 计算展示用数据（统一来自 PermissionContext 全局状态） ---------- */
 
-  /** 所属峰中文名（取第一个峰） */
+  /**
+   * 所属峰中文名：由 PermissionContext 的 peakIds + rbacApi.getAllPeaks() 映射得出，
+   * 与 Navbar 保持一致的全局数据源，确保峰信息全局同步
+   */
+  const userPeakNames = peakIds
+    .map((pid) => peaks.find((p) => Number(p.id) === pid)?.name)
+    .filter((n): n is string => Boolean(n));
   const getPeakDisplayName = (): string => {
-    if (!peakIds || peakIds.length === 0) return "无";
-    const firstPeakId = peakIds[0];
-    return PEAK_NAMES[firstPeakId] || `峰 ${firstPeakId}`;
+    return userPeakNames.length > 0 ? userPeakNames.join("、") : "无";
   };
 
-  /** 角色列表（逗号拼接） */
-  const roleList = roleNames?.map((r) => ROLE_DISPLAY_NAMES[r] || r).join(", ") || "外门弟子";
+  /**
+   * 角色显示名：由 PermissionContext 的 roles 映射得出（优先使用后端 displayName），
+   * 与 Navbar 保持一致的全局数据源，确保角色信息全局同步
+   */
+  const userRoleDisplayNames = roles.map(
+    (r) => r.displayName || ROLE_DISPLAY[r.name] || r.name
+  );
+  const roleList = userRoleDisplayNames.length > 0
+    ? userRoleDisplayNames.join("、")
+    : "外门弟子";
 
   /* ---------- 应用与首页一致的背景样式 ---------- */
   useEffect(() => {

@@ -28,6 +28,7 @@ const difficultyStyles: Record<string, string> = {
 const statusStyles: Record<string, string> = {
   "等待中": "border-blue-500 text-blue-500 border-2",
   "讨伐中": "border-red-500 text-red-500 border-2",
+  "已提交": "border-amber-500 text-amber-500 border-2",
   "已完成": "border-green-500 text-green-500 border-2",
 };
 

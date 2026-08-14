@@ -10,7 +10,7 @@
 "use client";
 
 import { PeakInfo, Disciple } from "@/types/sect";
-import DiscipleItem from "@/components/DiscipleItem";
+import DiscipleItem from "@/app/sect-affairs/components/DiscipleItem";
 
 interface PeakModalProps {
   isOpen: boolean;

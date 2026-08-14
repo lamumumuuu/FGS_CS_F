@@ -22,8 +22,8 @@ import { taskApi } from "@/app/api/client";
 import { usePermission } from "@/contexts/PermissionContext";
 import { PermissionButton } from "@/components/PermissionButton";
 import { QUEST_PERMISSIONS } from "@/types/permissions";
-import TaskCard from "@/components/TaskCard";
-import TaskDetail from "@/components/TaskDetail";
+import TaskCard from "@/app/task-hall/components/TaskCard";
+import TaskDetail from "@/app/task-hall/components/TaskDetail";
 
 /** 支持的视图模式 */
 type ViewMode = "list" | "detail";
@@ -42,6 +42,7 @@ const statusOptions: (TaskStatus | "全部状态")[] = [
   "全部状态",
   "等待中",
   "讨伐中",
+  "已提交",
   "已完成",
 ];
 
@@ -61,6 +62,8 @@ export default function TaskHall() {
     status: "全部状态",
     keyword: "",
   });
+  // 待审核任务数量（用于审核按钮红点提示）
+  const [pendingCount, setPendingCount] = useState(0);
 
   /* ------------------------------------------------------------------ */
   /*  数据获取：当筛选条件变化时重新请求任务列表                     */
@@ -87,6 +90,38 @@ export default function TaskHall() {
       ignore = true;
     };
   }, [filters]);
+
+  /* ------------------------------------------------------------------ */
+  /*  数据获取：加载待审核任务数量（用于审核按钮红点提示）              */
+  /*  仅在有审核权限（QUEST_PERMISSIONS.REVIEW）时加载                  */
+  /*  每60秒自动刷新一次                                                */
+  /* ------------------------------------------------------------------ */
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!hasPermission(QUEST_PERMISSIONS.REVIEW)) return;
+
+    let ignore = false;
+
+    async function fetchPendingCount() {
+      try {
+        const data = await taskApi.getPendingTasks();
+        if (!ignore) setPendingCount(data.length);
+      } catch (error) {
+        console.error("Failed to load pending count:", error);
+      }
+    }
+
+    fetchPendingCount();
+
+    // 每60秒刷新一次待审核数量
+    const intervalId = setInterval(fetchPendingCount, 60000);
+
+    return () => {
+      ignore = true;
+      clearInterval(intervalId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   /* ------------------------------------------------------------------ */
   /*  交互处理函数                                                     */
@@ -239,14 +274,20 @@ export default function TaskHall() {
       style={pageBackgroundStyle}
     >
       <div className="max-w-7xl mx-auto relative">
-        {/* 任务审核按钮：绝对定位到右上角 */}
-        {hasPermission(QUEST_PERMISSIONS.REVIEW_RESULT) && (
+        {/* 任务审核按钮：绝对定位到右上角（需 QUEST_PERMISSIONS.REVIEW 权限） */}
+        {hasPermission(QUEST_PERMISSIONS.REVIEW) && (
           <Link
             href="/task-hall/review"
             onClick={(e) => { e.preventDefault(); router.push("/task-hall/review"); }}
             className="absolute top-0 right-0 z-10 px-4 py-2 bg-blue-700 text-white font-medium rounded-lg hover:bg-blue-800 transition-all"
           >
             📋 任务审核
+            {/* 审核红点提示：有待审核任务时显示 */}
+            {pendingCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center animate-pulse shadow-sm border border-red-300">
+                {pendingCount > 9 ? "9+" : pendingCount}
+              </span>
+            )}
           </Link>
         )}
 

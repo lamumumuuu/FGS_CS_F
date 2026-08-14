@@ -50,6 +50,7 @@ const difficultyStyles: Record<string, string> = {
 const statusStyles: Record<string, string> = {
   "等待中": "border-blue-500 text-blue-500 border-2",
   "讨伐中": "border-red-500 text-red-500 border-2",
+  "已提交": "border-amber-500 text-amber-500 border-2",
   "已完成": "border-green-500 text-green-500 border-2",
   "审核中": "border-yellow-500 text-yellow-500 border-2",
   "已驳回": "border-red-400 text-red-400 border-2",
@@ -86,7 +87,7 @@ export default function TaskDetail({ task, onBack, onAccept, onUpdateTask, onDel
       if (onUpdateTask) {
         onUpdateTask(updatedTask);
       }
-      alert("任务提交成功！等待审核确认");
+      alert("任务提交成功！等待核查验收");
       setShowSubmitModal(false);
       setSubmitDescription("");
       setAttachmentUrl("");
@@ -175,6 +176,30 @@ export default function TaskDetail({ task, onBack, onAccept, onUpdateTask, onDel
                     </p>
                   </div>
                 </>
+              )}
+
+              {/* 🎯 提交成果（已提交或已完成且存在提交内容时展示） */}
+              {(task.status === "已提交" || task.status === "已完成") && task.submissionDescription && (
+                <div>
+                  <h2 className="text-lg font-bold text-gray-800 mb-3">
+                    🎯 提交成果
+                  </h2>
+                  <div className="border border-[#ddc899] rounded-lg p-4">
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                      {task.submissionDescription}
+                    </p>
+                    {task.attachmentUrl && (
+                      <a
+                        href={task.attachmentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block mt-3 text-blue-600 hover:underline break-all"
+                      >
+                        🔗 {task.attachmentUrl}
+                      </a>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -278,6 +303,12 @@ export default function TaskDetail({ task, onBack, onAccept, onUpdateTask, onDel
           {isCompleted && (
             <div className="text-green-700 font-bold text-lg mt-4">
               已完成 —— {task.completer?.name || "未知用户"}
+            </div>
+          )}
+          {/* 已提交：提示勇者成果已提交，等待审核验收 */}
+          {task.status === "已提交" && (
+            <div className="text-amber-700 font-semibold text-base mt-4">
+              ✅ 成果已提交，等待审核验收
             </div>
           )}
           {/* 被他人接取时仅显示接受者信息，不显示任何按钮 */}

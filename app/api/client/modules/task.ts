@@ -58,6 +58,9 @@ function transformTaskFromBackend(backendTask: any): Task {
     publisherId: task.publisherId || task.publisher_id,
     publisherName,
     publisherAvatar,
+    // 提交成果相关字段（勇者提交悬赏时填写）
+    submissionDescription: task.submissionDescription || task.submission_description || undefined,
+    attachmentUrl: task.attachmentUrl || task.attachment_url || undefined,
   };
 
   if (completerName) {

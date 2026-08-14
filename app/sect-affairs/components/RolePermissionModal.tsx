@@ -13,7 +13,7 @@
 
 import { useState, useEffect } from "react";
 import Modal from "@/components/Modal";
-import DeletePeakModal from "@/components/DeletePeakModal";
+import DeletePeakModal from "@/app/sect-affairs/components/DeletePeakModal";
 import { Role, Permission } from "@/types/rbac";
 import { PeakInfo } from "@/types/sect";
 import { rbacApi, sectApi } from "@/app/api/client";
@@ -95,11 +95,11 @@ export default function RolePermissionModal({
   }, [isOpen]);
 
   const groupedPermissions = allPermissions.reduce((acc, perm) => {
-    const module = perm.module || "其他";
-    if (!acc[module]) {
-      acc[module] = [];
+    const moduleKey = perm.module || "其他";
+    if (!acc[moduleKey]) {
+      acc[moduleKey] = [];
     }
-    acc[module].push(perm);
+    acc[moduleKey].push(perm);
     return acc;
   }, {} as Record<string, Permission[]>);
 
@@ -257,14 +257,14 @@ export default function RolePermissionModal({
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                  {Object.entries(groupedPermissions).map(([module, permissions]) => (
-                    <div key={module}>
+                  {Object.entries(groupedPermissions).map(([moduleKey, permissions]) => (
+                    <div key={moduleKey}>
                       <h5 className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
                         <span
                           className="inline-block w-1.5 h-1.5 rounded-full"
                           style={{ backgroundColor: "#0D9488" }}
                         />
-                        {module}
+                        {moduleKey}
                       </h5>
                       <div className="grid grid-cols-2 gap-1.5">
                         {permissions.map((perm) => {

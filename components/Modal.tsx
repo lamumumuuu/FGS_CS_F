@@ -17,9 +17,11 @@ interface ModalProps {
   title?: string;                      /// 标题文本
   children: React.ReactNode;           /// 内容
   size?: "sm" | "md" | "lg" | "xl";  /// 尺寸预设
+  containerStyle?: React.CSSProperties;  /// 自定义容器样式（如深色背景）
+  titleStyle?: React.CSSProperties;      /// 自定义标题栏样式（如金色文字）
 }
 
-export default function Modal({ isOpen, onClose, title, children, size = "md" }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, size = "md", containerStyle, titleStyle }: ModalProps) {
   /* ------------------------------------------------------------------ */
   /*  打开时绑定 Esc 并禁用背景滚动                                     */
   /* ------------------------------------------------------------------ */
@@ -49,7 +51,7 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4">
       {/* 遮罩层，点击关闭 */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -58,13 +60,18 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
       {/* 模态框主体 */}
       <div
         className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]`}
+        style={containerStyle}
       >
         {title && (
-          <div className="px-6 py-4 border-b border-amber-100 flex items-center justify-between flex-shrink-0">
-            <h3 className="text-lg font-bold text-gray-800">{title}</h3>
+          <div
+            className="px-6 py-4 border-b border-amber-100 flex items-center justify-between flex-shrink-0"
+            style={titleStyle ? { borderColor: (titleStyle as Record<string, string>).borderColor || "rgba(255,255,255,0.1)" } : undefined}
+          >
+            <h3 className="text-lg font-bold text-gray-800" style={titleStyle}>{title}</h3>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+              style={titleStyle ? { color: (titleStyle as Record<string, string>).color || "#d4af37" } : undefined}
             >
               ✕
             </button>

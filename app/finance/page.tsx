@@ -6,44 +6,20 @@ import { request } from "@/app/api/client/core/request";
 import { financeApi } from "@/app/api/client";
 import { FINANCE_PERMISSIONS } from "@/types/permissions";
 import Modal from "@/components/Modal";
-import Calculator from "@/components/Calculator";
+import Calculator from "@/app/finance/components/Calculator";
+import {
+  TabType,
+  AdjustmentCategory,
+  AdjustmentType,
+  PeakData,
+  MemberUser,
+  LingshiAdjustment,
+} from "./components/FinanceTypes";
+import AdjustmentCard from "./components/AdjustmentCard";
+import AllAdjustmentsModal from "./components/AllAdjustmentsModal";
+import AdjustmentFilterBar from "./components/AdjustmentFilterBar";
 
 type ViewMode = "all" | "peak";
-type TabType = "overview" | "peaks" | "adjustments" | "members";
-type AdjustmentCategory = "all" | "personal";
-type AdjustmentType = "all" | "adjust_in" | "adjust_out" | "reward" | "task_reward" | "allocate_in" | "peak_transfer_in" | "peak_transfer_out";
-
-interface PeakData {
-  peakId: number;
-  peakName: string;
-  availableLingshi: number;
-  totalLingshi: number;
-  discipleCount: number;
-}
-
-interface MemberUser {
-  discipleId: number;
-  name: string;
-  role: string;
-  peak: string;
-  lingshi: number;
-  user: string;
-}
-
-interface LingshiAdjustment {
-  id: number;
-  discipleId: number;
-  discipleName: string;
-  type: string;
-  amount: number;
-  balance: number;
-  operatorId: number;
-  operatorName: string;
-  remark?: string;
-  createdAt?: string;
-  peakId?: number;
-  peakName?: string;
-}
 
 const ROLE_DISPLAY: Record<string, string> = {
   sect_master: "宗主",
@@ -59,28 +35,6 @@ const PEAK_NAMES: Record<number, string> = {
   3: "电路峰",
 };
 
-const ADJUSTMENT_TYPE_MAP: Record<string, { label: string; color: string }> = {
-  adjust_in: { label: "灵石增加", color: "#059669" },
-  adjust_out: { label: "灵石扣除", color: "#dc2626" },
-  allocate_in: { label: "灵石分配", color: "#0D9488" },
-  allocate_out: { label: "峰间调拨", color: "#7C3AED" },
-  reward: { label: "任务奖励", color: "#d97706" },
-  task_reward: { label: "任务奖励", color: "#d97706" },
-  peak_allocate: { label: "峰间调拨", color: "#7C3AED" },
-  peak_transfer_in: { label: "峰间调拨收入", color: "#7C3AED" },
-  peak_transfer_out: { label: "峰间调拨支出", color: "#7C3AED" },
-  peak_return_in: { label: "灵石退回收入", color: "#92400e" },
-  peak_return_out: { label: "灵石退回", color: "#b45309" },
-  allocate_to_member: { label: "峰灵石分配", color: "#0D9488" },
-};
-
-function formatDate(dateStr?: string) {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
 export default function FinancePage() {
   const { hasPermission, isAuthenticated, loading: permLoading, peakIds, refreshPermissions, user } = usePermission();
 
@@ -92,6 +46,8 @@ export default function FinancePage() {
   // 调整日志筛选状态
   const [adjustmentCategory, setAdjustmentCategory] = useState<AdjustmentCategory>("all");
   const [adjustmentType, setAdjustmentType] = useState<AdjustmentType>("all");
+  // 更多详情弹窗（灵石收支全部记录）
+  const [showAllAdjustments, setShowAllAdjustments] = useState(false);
 
   // 总可支配灵石（宗门公共）
   const [totalDisposable, setTotalDisposable] = useState<number>(0);
@@ -197,27 +153,55 @@ export default function FinancePage() {
     }
   };
 
+  /**
+   * 根据合并后的筛选类型在前端过滤记录
+   * - reward → 匹配 type === "reward" || type === "task_reward"
+   * - peak_transfer → 匹配 type === "peak_transfer_in" || type === "peak_transfer_out"
+   * - peak_return → 匹配 type === "peak_return_in" || type === "peak_return_out"
+   */
+  const filterAdjustmentsByType = (data: LingshiAdjustment[], type: AdjustmentType): LingshiAdjustment[] => {
+    if (type === "all") return data;
+    switch (type) {
+      case "reward":
+        return data.filter((adj) => adj.type === "reward" || adj.type === "task_reward");
+      case "peak_transfer":
+        return data.filter((adj) => adj.type === "peak_transfer_in" || adj.type === "peak_transfer_out");
+      case "peak_return":
+        return data.filter((adj) => adj.type === "peak_return_in" || adj.type === "peak_return_out");
+      default:
+        return data;
+    }
+  };
+
   const loadAdjustments = async (mode?: "all" | "peak", category?: AdjustmentCategory, type?: AdjustmentType) => {
     try {
       const effectiveCategory = category || adjustmentCategory;
       const effectiveType = type || adjustmentType;
 
+      // 合并类型（reward / peak_transfer / peak_return）需要前端过滤：
+      // API 不传 type 参数，获取全部后在前端按多个 type 值过滤
+      const isMergedType =
+        effectiveType === "reward" ||
+        effectiveType === "peak_transfer" ||
+        effectiveType === "peak_return";
+      const apiType = isMergedType ? "all" : effectiveType;
+
       // 峰财务模式：使用 /finance/peak-adjustments 端点（仅需 view_own_peak 权限）
       // 全部财务模式：使用 /finance/adjustments 端点（需 view_all 权限）
       if (mode === "peak") {
         const params: string[] = [];
-        if (effectiveType !== "all") params.push(`type=${effectiveType}`);
+        if (apiType !== "all") params.push(`type=${apiType}`);
         const query = params.length > 0 ? `?${params.join("&")}` : "";
         const data = await request<LingshiAdjustment[]>(`/finance/peak-adjustments${query}`, undefined, true);
-        setAdjustments(data || []);
+        setAdjustments(isMergedType ? filterAdjustmentsByType(data || [], effectiveType) : (data || []));
       } else {
         // 构建查询参数
         const params: string[] = [];
-        if (effectiveType !== "all") params.push(`type=${effectiveType}`);
+        if (apiType !== "all") params.push(`type=${apiType}`);
         if (effectiveCategory !== "all") params.push(`category=${effectiveCategory}`);
         const query = params.length > 0 ? `?${params.join("&")}` : "";
         const data = await request<LingshiAdjustment[]>(`/finance/adjustments${query}`, undefined, true);
-        setAdjustments(data || []);
+        setAdjustments(isMergedType ? filterAdjustmentsByType(data || [], effectiveType) : (data || []));
       }
     } catch (err) {
       console.error("加载调整记录失败:", err);
@@ -517,7 +501,7 @@ export default function FinancePage() {
   if (permLoading || loading) {
     return (
       <div
-        className="flex-1 flex items-center justify-center min-h-[calc(100vh-72px)]"
+        className="flex-1 flex items-center justify-center min-h-[100vh]"
         style={{ backgroundColor: "#93c1a8" }}
       >
         <div className="text-xl font-shan" style={{ color: "#1a4a3a" }}>加载中...</div>
@@ -528,7 +512,7 @@ export default function FinancePage() {
   if (!isAuthenticated || (!canViewAll && !canViewOwnPeak)) {
     return (
       <div
-        className="flex-1 flex items-center justify-center min-h-[calc(100vh-72px)]"
+        className="flex-1 flex items-center justify-center min-h-[100vh]"
         style={{ backgroundColor: "#93c1a8" }}
       >
         <div className="text-center">
@@ -543,7 +527,7 @@ export default function FinancePage() {
 
   return (
     <div
-      className="flex-1 py-8 px-4 sm:px-6 lg:px-8 min-h-[calc(100vh-72px)]"
+      className="flex-1 py-8 px-4 sm:px-6 lg:px-8 min-h-[100vh]"
       style={{
         background: `
           linear-gradient(rgba(147, 193, 168, 0.4), rgba(147, 193, 168, 0.6)),
@@ -1005,65 +989,19 @@ export default function FinancePage() {
         {activeTab === "adjustments" && (
           <div className="card-rise card-rise-4 space-y-4">
             {/* 筛选器 */}
-            <div
-              className="rounded-xl p-4"
-              style={{
-                backgroundColor: "rgba(255,255,255,0.55)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(255,255,255,0.3)",
+            <AdjustmentFilterBar
+              category={adjustmentCategory}
+              type={adjustmentType}
+              onCategoryChange={(v) => {
+                setAdjustmentCategory(v);
+                loadAdjustments(undefined, v, adjustmentType);
               }}
-            >
-              <div className="flex flex-col sm:flex-row gap-4">
-                {/* 日志分类筛选 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-shan" style={{ color: "#5a7a6a" }}>分类：</span>
-                  <select
-                    value={adjustmentCategory}
-                    onChange={(e) => {
-                      setAdjustmentCategory(e.target.value as AdjustmentCategory);
-                      loadAdjustments(undefined, e.target.value as AdjustmentCategory, adjustmentType);
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-sm border focus:outline-none"
-                    style={{ borderColor: "rgba(15, 118, 110, 0.2)", backgroundColor: "#fff" }}
-                  >
-                    <option value="all">全部日志</option>
-                    <option value="personal">个人相关</option>
-                  </select>
-                </div>
-
-                {/* 操作类型筛选 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-shan" style={{ color: "#5a7a6a" }}>类型：</span>
-                  <select
-                    value={adjustmentType}
-                    onChange={(e) => {
-                      setAdjustmentType(e.target.value as AdjustmentType);
-                      loadAdjustments(undefined, adjustmentCategory, e.target.value as AdjustmentType);
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-sm border focus:outline-none"
-                    style={{ borderColor: "rgba(15, 118, 110, 0.2)", backgroundColor: "#fff" }}
-                  >
-                    <option value="all">全部类型</option>
-                    <option value="adjust_in">灵石增加</option>
-                    <option value="adjust_out">灵石扣除</option>
-                    <option value="reward">任务奖励</option>
-                    <option value="task_reward">任务奖励(兼容)</option>
-                    <option value="allocate_in">灵石分配</option>
-                    <option value="peak_transfer_in">峰间调拨收入</option>
-                    <option value="peak_transfer_out">峰间调拨支出</option>
-                    <option value="peak_return_in">灵石退回收入</option>
-                    <option value="peak_return_out">灵石退回</option>
-                  </select>
-                </div>
-
-                {/* 统计信息 */}
-                <div className="flex items-center gap-2 sm:ml-auto">
-                  <span className="text-sm font-shan" style={{ color: "#5a7a6a" }}>
-                    共 {adjustments.length} 条记录
-                  </span>
-                </div>
-              </div>
-            </div>
+              onTypeChange={(v) => {
+                setAdjustmentType(v);
+                loadAdjustments(undefined, adjustmentCategory, v);
+              }}
+              totalCount={adjustments.length}
+            />
 
             {adjustments.length === 0 ? (
               <div
@@ -1077,76 +1015,33 @@ export default function FinancePage() {
                 暂无调整记录
               </div>
             ) : (
-              adjustments.map((adj) => {
-                const typeInfo = ADJUSTMENT_TYPE_MAP[adj.type] || {
-                  label: adj.type,
-                  color: "#5a7a6a",
-                };
-                const isPositive = adj.amount > 0;
-                return (
+              <>
+                {/* 默认仅显示最近 3 条记录 */}
+                {adjustments.slice(0, 3).map((adj) => (
+                  <AdjustmentCard key={adj.id} adj={adj} />
+                ))}
+                {/* 记录总数 > 3 时显示"更多详情"卡片，点击弹出全部记录弹窗 */}
+                {adjustments.length > 3 && (
                   <div
-                    key={adj.id}
-                    className="rounded-xl p-4 transition-all hover:shadow-lg"
+                    onClick={() => setShowAllAdjustments(true)}
+                    className="rounded-xl p-4 cursor-pointer transition-all hover:shadow-lg flex items-center justify-between"
                     style={{
-                      backgroundColor: "rgba(255,255,255,0.55)",
-                      backdropFilter: "blur(12px)",
-                      border: "1px solid rgba(255,255,255,0.3)",
+                      backgroundColor: "#2b1e10",
+                      border: "1px solid #332418",
                     }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span
-                            className="px-2 py-0.5 rounded text-xs font-medium font-shan"
-                            style={{
-                              backgroundColor: typeInfo.color + "22",
-                              color: typeInfo.color,
-                            }}
-                          >
-                            {typeInfo.label}
-                          </span>
-                          {adj.peakName && (
-                            <span
-                              className="px-2 py-0.5 rounded text-xs font-medium font-shan"
-                              style={{
-                                backgroundColor: "rgba(13, 148, 136, 0.1)",
-                                color: "#0D9488",
-                              }}
-                            >
-                              {adj.peakName}
-                            </span>
-                          )}
-                          <span className="text-sm font-shan" style={{ color: "#1a4a3a" }}>
-                            {adj.discipleName}
-                          </span>
-                        </div>
-                        <div className="text-xs" style={{ color: "#5a7a6a" }}>
-                          操作人：{adj.operatorName}
-                          {adj.remark && ` · ${adj.remark}`}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div
-                          className="text-lg font-bold font-shan"
-                          style={{ color: isPositive ? "#059669" : "#dc2626" }}
-                        >
-                          {isPositive ? "+" : ""}
-                          {adj.amount.toLocaleString()}
-                        </div>
-                        <div className="text-xs" style={{ color: "#5a7a6a" }}>
-                          余额: {adj.balance.toLocaleString()}
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-shan" style={{ color: "#e6c068" }}>
+                        更多详情
+                      </span>
+                      <span className="text-xs font-shan" style={{ color: "#8a7355" }}>
+                        （共 {adjustments.length} 条记录）
+                      </span>
                     </div>
-                    <div
-                      className="text-xs mt-2 pt-2"
-                      style={{ borderTop: "1px solid rgba(26,74,58,0.1)", color: "#5a7a6a" }}
-                    >
-                      {formatDate(adj.createdAt)}
-                    </div>
+                    <span className="text-lg" style={{ color: "#e6c068" }}>→</span>
                   </div>
-                );
-              })
+                )}
+              </>
             )}
           </div>
         )}
@@ -1648,6 +1543,13 @@ export default function FinancePage() {
           </div>
         </div>
       </Modal>
+
+      {/* 更多详情弹窗：展示全部灵石收支记录（深褐色风格，金色文字） */}
+      <AllAdjustmentsModal
+        isOpen={showAllAdjustments}
+        onClose={() => setShowAllAdjustments(false)}
+        adjustments={adjustments}
+      />
 
       {/* 财务专用计算器（收纳为左下角圆形按钮） */}
       {(canViewAll || canViewOwnPeak) && <Calculator />}

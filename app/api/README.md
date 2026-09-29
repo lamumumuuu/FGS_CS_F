@@ -15,7 +15,7 @@ app/api/
 
 ## API 基础配置
 
-- **基础 URL**: `http://localhost:8080/api`
+- **基础 URL**: `http://localhost:8081/api`
 - **数据格式**: JSON (application/json)
 - **字符编码**: UTF-8
 - **认证方式**: JWT (JSON Web Token)
@@ -326,7 +326,7 @@ try {
    - 退出登录时清除 Token
 
 2. **统一 Base URL**
-   - 从相对路径 `/api` 改为完整 URL `http://localhost:8080/api`
+   - 从相对路径 `/api` 改为完整 URL `http://localhost:8081/api`
 
 3. **认证接口标记**
    - 所有需要认证的接口已标记 `requiresAuth: true`

@@ -54,6 +54,7 @@ const statusStyles: Record<string, string> = {
   "已完成": "border-green-500 text-green-500 border-2",
   "审核中": "border-yellow-500 text-yellow-500 border-2",
   "已驳回": "border-red-400 text-red-400 border-2",
+  "已结束": "border-gray-500 text-gray-500 border-2",
 };
 
 export default function TaskDetail({ task, onBack, onAccept, onUpdateTask, onDeleteTask, onEditTask, onForceClose }: TaskDetailProps) {

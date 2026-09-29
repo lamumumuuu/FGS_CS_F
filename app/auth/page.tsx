@@ -47,6 +47,7 @@ export default function AuthPage() {
 
   /* ---------- 注册表单状态 ---------- */
   const [regUsername, setRegUsername] = useState("");
+  const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -58,6 +59,7 @@ export default function AuthPage() {
 
   /* ---------- 表单验证错误 ---------- */
   const [usernameError, setUsernameError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
 
@@ -149,6 +151,7 @@ export default function AuthPage() {
     setAnimating(true);
     setError("");
     setUsernameError("");
+    setEmailError("");
     setPasswordError("");
     setConfirmPasswordError("");
 
@@ -181,6 +184,16 @@ export default function AuthPage() {
     return "";
   }
 
+  /** 验证邮箱（两侧账号唯一标识，注册必填） */
+  function validateEmail(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) return "请输入邮箱";
+    if (trimmed.length > 100) return "邮箱最多100个字符";
+    // 与后端 @Email 校验保持一致的基础格式校验
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "邮箱格式不正确";
+    return "";
+  }
+
   /** 验证密码 */
   function validatePassword(value: string): string {
     if (!value) return "请输入密码";
@@ -196,6 +209,21 @@ export default function AuthPage() {
     return "";
   }
 
+  /** 验证登录账号（用户名或邮箱）：官网注册用户只知邮箱，故登录侧需同时接受两种标识 */
+  function validateLoginAccount(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) return "请输入用户名或邮箱";
+    if (trimmed.length > 100) return "账号最多100个字符";
+    if (trimmed.includes("@") && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "邮箱格式不正确";
+    return "";
+  }
+
+  /** 验证登录密码：只要求非空（官网注册的密码长度不受旧项目注册策略约束） */
+  function validateLoginPassword(value: string): string {
+    if (!value) return "请输入密码";
+    return "";
+  }
+
   /* ------------------------------------------------------------------ */
   /*  登录处理                                                          */
   /* ------------------------------------------------------------------ */
@@ -203,8 +231,8 @@ export default function AuthPage() {
     e.preventDefault();
     setError("");
 
-    const uErr = validateUsername(loginUsername);
-    const pErr = validatePassword(loginPassword);
+    const uErr = validateLoginAccount(loginUsername);
+    const pErr = validateLoginPassword(loginPassword);
     setUsernameError(uErr);
     setPasswordError(pErr);
     if (uErr || pErr) return;
@@ -232,20 +260,23 @@ export default function AuthPage() {
     setError("");
 
     const uErr = validateUsername(regUsername);
+    const eErr = validateEmail(regEmail);
     const pErr = validatePassword(regPassword);
     const cpErr = validateConfirmPassword(regConfirmPassword, regPassword);
     setUsernameError(uErr);
+    setEmailError(eErr);
     setPasswordError(pErr);
     setConfirmPasswordError(cpErr);
-    if (uErr || pErr || cpErr) return;
+    if (uErr || eErr || pErr || cpErr) return;
 
     setLoading(true);
     try {
-      await userApi.register({ username: regUsername, password: regPassword, studentId, peak });
+      await userApi.register({ username: regUsername, password: regPassword, email: regEmail.trim(), studentId, peak });
       alert("注册成功，请登录");
       // 切换到登录模式
       handleModeSwitch("login");
       setRegUsername("");
+      setRegEmail("");
       setRegPassword("");
       setRegConfirmPassword("");
       setStudentId("");
@@ -331,7 +362,7 @@ export default function AuthPage() {
             backgroundColor: "#f5f1e4",
             border: "1px dashed #333",
             borderRadius: "0px",
-            minHeight: mode === "login" ? "420px" : "600px",
+            minHeight: mode === "login" ? "420px" : "700px",
             transition: "min-height 800ms cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         >
@@ -380,7 +411,7 @@ export default function AuthPage() {
           {/* ---------- 登录表单（带800ms丝滑弹出动画） ---------- */}
           <div
             style={{
-              maxHeight: showForm ? "600px" : "0",
+              maxHeight: showForm ? "900px" : "0",
               opacity: showForm ? 1 : 0,
               overflow: "hidden",
               transition: "max-height 800ms cubic-bezier(0.4, 0, 0.2, 1), opacity 800ms ease",
@@ -389,16 +420,16 @@ export default function AuthPage() {
             {mode === "login" && showForm && (
               <form onSubmit={handleLogin} className="space-y-5 pt-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">用户名 / 邮箱</label>
                   <input
                     type="text"
                     value={loginUsername}
                     onChange={(e) => {
                       setLoginUsername(e.target.value);
-                      if (usernameError) setUsernameError(validateUsername(e.target.value));
+                      if (usernameError) setUsernameError(validateLoginAccount(e.target.value));
                     }}
-                    onBlur={() => setUsernameError(validateUsername(loginUsername))}
-                    placeholder="请输入用户名"
+                    onBlur={() => setUsernameError(validateLoginAccount(loginUsername))}
+                    placeholder="请输入用户名或邮箱"
                     className={`w-full px-4 py-3 bg-transparent border border-dashed rounded-none focus:outline-none focus:ring-0 transition-all ${usernameError ? "border-red-400" : "border-[#cfc7ba]"
                       }`}
                     required
@@ -413,9 +444,9 @@ export default function AuthPage() {
                     value={loginPassword}
                     onChange={(e) => {
                       setLoginPassword(e.target.value);
-                      if (passwordError) setPasswordError(validatePassword(e.target.value));
+                      if (passwordError) setPasswordError(validateLoginPassword(e.target.value));
                     }}
-                    onBlur={() => setPasswordError(validatePassword(loginPassword))}
+                    onBlur={() => setPasswordError(validateLoginPassword(loginPassword))}
                     placeholder="请输入密码"
                     className={`w-full px-4 py-3 bg-transparent border border-dashed rounded-none focus:outline-none focus:ring-0 transition-all ${usernameError ? "border-red-400" : "border-[#cfc7ba]"
                       }`}
@@ -453,6 +484,24 @@ export default function AuthPage() {
                     required
                   />
                   {usernameError && <p className="mt-1 text-xs text-red-500">{usernameError}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => {
+                      setRegEmail(e.target.value);
+                      if (emailError) setEmailError(validateEmail(e.target.value));
+                    }}
+                    onBlur={() => setEmailError(validateEmail(regEmail))}
+                    placeholder="请输入邮箱（用于账号唯一标识）"
+                    className={`w-full px-4 py-3 bg-transparent border border-dashed rounded-none focus:outline-none focus:ring-0 transition-all ${emailError ? "border-red-400" : "border-[#cfc7ba]"
+                      }`}
+                    required
+                  />
+                  {emailError && <p className="mt-1 text-xs text-red-500">{emailError}</p>}
                 </div>
 
                 <div>

@@ -52,12 +52,12 @@ export const userApi = {
   /**
    * 用户注册
    * 
-   * @param data - 注册信息（用户名、密码、学号、所属峰）
+   * @param data - 注册信息（用户名、密码、邮箱、所属峰）
    * @returns 注册成功消息
-   * @throws Error - 用户名已存在或验证失败时抛出
+   * @throws Error - 用户名或邮箱已存在、验证失败时抛出
    * 
    * 使用场景：新用户在注册页面提交注册表单时调用。
-   * 业务逻辑：前端仅发送 username、password、peak 字段，studentId 字段当前未发送。
+   * 业务逻辑：前端发送 username、password、email、peak 字段；email 为两侧账号唯一标识，注册必填。
    */
   register: async (data: RegisterData): Promise<string> => {
     return request<string>("/user/register", {
@@ -65,6 +65,7 @@ export const userApi = {
       body: JSON.stringify({
         username: data.username,
         password: data.password,
+        email: data.email,
         peak: data.peak || "无",
       }),
     });

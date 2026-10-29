@@ -356,7 +356,7 @@ export default function Navbar() {
                   className={`text-medium font-medium hidden sm:block font-shan ${isDarkNavbar ? "text-gray-200" : (isSectAffairs || isFinance) ? "text-emerald-900" : "text-gray-700"
                     }`}
                 >
-                  {user.username}
+                  {user.nickname || user.username}
                 </span>
               </div>
 
@@ -381,7 +381,7 @@ export default function Navbar() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-lg truncate text-gray-800">
-                            {user.username}
+                            {user.nickname || user.username}
                           </div>
                           {/* 所属峰信息（替代原 ID 显示） */}
                           <div className="text-gray-600 text-xs mt-1 flex items-center gap-1">

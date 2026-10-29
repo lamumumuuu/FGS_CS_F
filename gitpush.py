@@ -87,16 +87,6 @@ def main():
         f.write(current_branch)
     print(f"🌿 当前所在分支: {current_branch}")
     print(f"📁 当前绝对路径: {abs_path}")
-    
-    if remote_url:
-        check_branch = run_cmd(f"git ls-remote --heads origin {current_branch}")
-        if check_branch:
-            print(f"🔄 正在尝试拉取远程 [{current_branch}] 分支最新代码...")
-            pull_res = run_cmd(f"git pull origin {current_branch}")
-            if "fatal" in pull_res.lower() or "error" in pull_res.lower():
-                print(f"⚠️ 拉取代码提示: {pull_res.splitlines()[-1] if pull_res else '失败'}")
-        else:
-            print("ℹ️ 远程仓库暂无此分支，跳过拉取（将作为新分支推送）。")
     print("="*40 + "\n")
 
     # ================= 第四步 =================
@@ -137,28 +127,45 @@ def main():
     
     # 获取暂存区的文件，方便用户确认
     staged_files_str = run_cmd("git diff --cached --name-only")
+    
     if not staged_files_str:
-        print("没有检测到任何代码改动，跳过提交。")
-        sys.exit(0)
+        # 没有暂存的文件，检查是否有未推送的本地提交
+        unpushed = run_cmd(f"git log origin/{current_branch}..HEAD --oneline")
+        is_new_branch = "fatal" in unpushed.lower() or "unknown revision" in unpushed.lower()
         
-    print(f"\n{C_CYAN}📂 本次准备提交的文件:{C_RESET}")
-    for file in staged_files_str.split('\n'):
-        print(f"   - {file}")
-    
-    # 醒目的 commit 提示
-    print("\n" + "="*40)
-    print(f"{C_YELLOW}⚠️  请输入本次提交的说明 (如果直接按回车，将使用默认说明)：{C_RESET}")
-    commit_msg = input(f"{C_YELLOW}👉 Commit Message: {C_RESET}").strip()
-    
-    if not commit_msg:
-        commit_msg = "Auto commit by script"
-        print(f"{C_CYAN}使用默认说明: {commit_msg}{C_RESET}")
+        if not unpushed and not is_new_branch:
+            print("没有检测到任何代码改动，且本地无未推送的提交，跳过。")
+            sys.exit(0)
+        else:
+            print(f"{C_YELLOW}⚠️ 工作区干净，但发现本地有未推送的提交：{C_RESET}")
+            if not is_new_branch:
+                lines = unpushed.split('\n')
+                for line in lines[:5]:
+                    print(f"   - {line}")
+                if len(lines) > 5:
+                    print(f"   - ... 等共 {len(lines)} 个提交")
+            else:
+                print("   （这是一个新分支，包含未推送的提交）")
+            print(f"{C_CYAN}将跳过 commit 环节，直接尝试推送。{C_RESET}\n")
+    else:
+        print(f"\n{C_CYAN}📂 本次准备提交的文件:{C_RESET}")
+        for file in staged_files_str.split('\n'):
+            print(f"   - {file}")
         
-    print(f"正在执行提交: {C_GREEN}{commit_msg}{C_RESET} ...\n")
-    commit_result = run_cmd(f'git commit -m "{commit_msg}"')
-    if "nothing to commit" in commit_result.lower():
-        print("暂无改动需要提交。")
-        sys.exit(0)
+        # 醒目的 commit 提示
+        print("\n" + "="*40)
+        print(f"{C_YELLOW}⚠️  请输入本次提交的说明 (如果直接按回车，将使用默认说明)：{C_RESET}")
+        commit_msg = input(f"{C_YELLOW}👉 Commit Message: {C_RESET}").strip()
+        
+        if not commit_msg:
+            commit_msg = "Auto commit by script"
+            print(f"{C_CYAN}使用默认说明: {commit_msg}{C_RESET}")
+            
+        print(f"正在执行提交: {C_GREEN}{commit_msg}{C_RESET} ...\n")
+        commit_result = run_cmd(f'git commit -m "{commit_msg}"')
+        if "nothing to commit" in commit_result.lower():
+            print("暂无改动需要提交。")
+            sys.exit(0)
 
     # ================= 第五步 =================
     print("正在检测网络连通性...")

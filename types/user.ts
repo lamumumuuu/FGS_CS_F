@@ -49,8 +49,6 @@ export interface LoginResponse {
 export interface BackendUser {
   id: string;
   username: string;
-  email?: string;
-  nickname?: string;
   avatar?: string;
   role: number;
   status: number;

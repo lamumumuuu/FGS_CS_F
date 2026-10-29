@@ -49,3 +49,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+gitpush.py
+
+# Auto Commit Script Files
+.last_branch

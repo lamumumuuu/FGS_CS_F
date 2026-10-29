@@ -51,6 +51,3 @@ yarn-error.log*
 next-env.d.ts
 
 gitpush.py
-
-# Auto Commit Script Files
-.last_branch

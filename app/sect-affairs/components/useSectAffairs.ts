@@ -86,7 +86,8 @@ export function useSectAffairs(hasPermission: (perm: string) => boolean) {
 
   // 权限
   const canManagePermissions = hasPermission(SYSTEM_PERMISSIONS.ADMIN);
-  const canAddDisciple = hasPermission(MEMBER_PERMISSIONS.UPDATE_ROLE);
+  // 加入成员属于审批动作（member:approve），与编辑成员资料（member:update）分离
+  const canAddDisciple = hasPermission(MEMBER_PERMISSIONS.APPROVE_JOIN);
   const canDeleteDisciple = hasPermission(MEMBER_PERMISSIONS.EXPEL);
   const canMoveDisciple = hasPermission(PEAK_PERMISSIONS.MANAGE_MEMBERS);
   const canEditDisciple = hasPermission(MEMBER_PERMISSIONS.UPDATE_ROLE);
@@ -141,14 +142,14 @@ export function useSectAffairs(hasPermission: (perm: string) => boolean) {
     }
   }
 
-  // 删除弟子
+  // 成员离会（账号保留）
   async function handleDeleteDisciple(disciple: Disciple) {
     if (!canDeleteDisciple) { showToast("没有权限", "error"); return; }
-    if (!confirm(`确定要删除弟子 ${disciple.name} 吗？`)) return;
+    if (!confirm(`确定要结束 ${disciple.name} 的成员关系吗？账号与历史记录会保留。`)) return;
     setActionLoading(true);
     try {
       await sectApi.deleteDisciple(disciple.id);
-      showToast(`已删除弟子 ${disciple.name}`, "success");
+      showToast(`已结束 ${disciple.name} 的成员关系`, "success");
       await loadAllData();
     } catch {
       showToast("删除失败", "error");
@@ -186,8 +187,8 @@ export function useSectAffairs(hasPermission: (perm: string) => boolean) {
     if (!canAddDisciple) { showToast("没有权限", "error"); return; }
     setFormError("");
     const name = formData.name.trim();
-    if (!name) { setFormError("弟子姓名不能为空"); return; }
-    if (name.length < 2 || name.length > 20) { setFormError("姓名长度需在2-20个字符"); return; }
+    if (!name) { setFormError("登录用户名不能为空"); return; }
+    if (name.length < 3 || name.length > 20) { setFormError("用户名长度需在3-20个字符"); return; }
     const sid = formData.studentId.trim();
     if (sid && !/^[a-zA-Z0-9_-]{3,20}$/.test(sid)) { setFormError("学号格式不正确"); return; }
     setActionLoading(true);
@@ -199,7 +200,7 @@ export function useSectAffairs(hasPermission: (perm: string) => boolean) {
         peak: formData.peak,
         joinedAt: new Date().toISOString(),
       });
-      showToast(`弟子 "${name}" 添加成功！默认密码：123456`, "success");
+      showToast(`已将 "${name}" 加入成员`, "success");
       setShowAddModal(false);
       await loadAllData();
     } catch (err) {

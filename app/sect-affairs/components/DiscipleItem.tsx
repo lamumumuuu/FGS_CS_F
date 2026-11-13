@@ -27,6 +27,7 @@ const roleColors: Record<SectRole, string> = {
   长老: "bg-blue-600 text-blue-50",
   内门弟子: "bg-teal-600 text-teal-50",
   外门弟子: "bg-green-600 text-green-50",
+  成员: "bg-slate-500 text-slate-50",
 };
 
 export default function DiscipleItem({ disciple, onContextMenu, onClick, compact = false }: DiscipleItemProps) {

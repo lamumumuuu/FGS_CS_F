@@ -5,7 +5,7 @@
  * 
  * 统一导出所有 API 模块，提供便捷的访问方式。
  * 模块结构：
- * - core/     - 核心工具（Token 管理、请求封装、权限存储）
+ * - core/     - 同源 BFF 请求原语（Cookie 身份，无 localStorage token）
  * - modules/  - 业务 API 模块（用户、RBAC、任务、宗门）
  */
 
@@ -16,5 +16,9 @@ export { sectApi } from "./modules/sect";
 export { announcementApi } from "./modules/announcement";
 export { eventApi } from "./modules/event";
 export { financeApi } from "./modules/finance";
-
-export { getStoredPermissions, hasPermission, hasRole, hasAnyRole, isGlobalUser } from "./core/permissions";
+export { walletApi } from "./modules/wallet";
+export type {
+  WalletEntryRow,
+  WalletRecipient,
+  WalletTransferResult,
+} from "./modules/wallet";

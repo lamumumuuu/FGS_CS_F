@@ -1,123 +1,124 @@
 // app/api/client/modules/user.ts
 
 /**
- * 用户认证 API 模块
- * 
- * 提供用户登录、注册、获取用户信息、登出等认证相关接口。
+ * 用户认证 API 模块（同源 BFF + HttpOnly Cookie）
+ *
+ * 登录/登出/当前用户不再读写 localStorage token；身份与权限由 BFF 读取 Cookie。
+ * 旧 localStorage 键在登出时清理一次，兼容从旧版本升级的浏览器。
  */
 
-import { User, LoginCredentials, RegisterData, LoginResponse, UserInfoResponse } from "@/types/user";
-import { request } from "../core/request";
-import { setToken, clearTokens, getToken, isTokenExpired } from "../core/token";
-import { saveUserPermissions, clearUserPermissions } from "../core/permissions";
+import { UserInfoResponse } from "@/types/user";
+import type { BackendUser } from "@/types/user";
+import type { Role, Permission } from "@/types/rbac";
+
+/** 清理旧版本遗留的 localStorage 键（token / 权限缓存）。 */
+function clearLegacyAuthStorage(): void {
+  if (typeof window === "undefined") return;
+  for (const key of ["fgscs_token", "fgscs_refresh_token", "fgscs_permissions"]) {
+    window.localStorage.removeItem(key);
+  }
+}
+
+async function bffJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const text = await res.text();
+  const data = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+  if (!res.ok) {
+    throw new Error(
+      (data?.message as string | undefined) ??
+        (data?.error as string | undefined) ??
+        `请求失败 (${res.status})`,
+    );
+  }
+  return data as T;
+}
+
+async function verifyTwoFactor(twoFactorToken: string): Promise<void> {
+  const code = window.prompt("该账号已启用两步验证，请输入 6 位验证码");
+  if (!code) throw new Error("已取消两步验证");
+  await bffJson("/api/auth/2fa/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ two_factor_token: twoFactorToken, code }),
+  });
+}
 
 export const userApi = {
-  /**
-   * 获取当前用户完整信息（需认证）
-   * 
-   * @returns 用户信息及权限数据
-   * @throws Error - 用户未登录或请求失败时抛出
-   * 
-   * 使用场景：页面初始化时获取当前登录用户信息，用于展示个人资料和权限判断。
-   * 业务逻辑：请求成功后自动缓存用户权限到本地存储。
-   */
+  /** 当前用户 + 权限（BFF Cookie 身份） */
   getCurrentUser: async (): Promise<UserInfoResponse> => {
-    const data = await request<UserInfoResponse>("/user/me", undefined, true);
-    saveUserPermissions(data);
-    return data;
+    const me = await bffJson<{ user?: Record<string, unknown>; roles?: string[] }>("/api/auth/me");
+    const perms = await bffJson<{ permissions?: string[] }>("/api/rbac/me/permissions").catch(
+      () => ({ permissions: [] }),
+    );
+    const raw = me.user ?? {};
+    const user: BackendUser = {
+      id: String(raw.id ?? ""),
+      username: String(raw.username ?? ""),
+      avatar: String(raw.avatarUrl ?? raw.avatar_url ?? ""),
+      role: 0,
+      status: 1,
+    };
+    const permissionNames = perms.permissions ?? [];
+    return {
+      user,
+      roles: [] as Role[],
+      roleNames: Array.isArray(me.roles) ? me.roles : [],
+      permissions: permissionNames.map((name) => ({ name } as unknown as Permission)),
+      permissionNames,
+      peakIds: [],
+      isGlobal: permissionNames.includes("*:*"),
+    };
   },
 
-  /**
-   * 用户登录
-   * 
-   * @param credentials - 登录凭证（用户名和密码）
-   * @returns 登录响应数据（包含 token 和用户信息）
-   * @throws Error - 用户名或密码错误时抛出
-   * 
-   * 使用场景：用户在登录页面提交登录表单时调用。
-   * 业务逻辑：登录成功后自动保存 token 到本地存储，并缓存用户权限信息。
-   */
-  login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
-    const data = await request<LoginResponse>("/user/login", {
-      method: "POST",
-      body: JSON.stringify(credentials),
-    });
-    if (data.token) {
-      setToken(data.token);
-      saveUserPermissions(data);
+  /** 登录：BFF 写入 HttpOnly Cookie；需要 2FA 时完成验证后重试 */
+  login: async (credentials: { username: string; password: string }) => {
+    const result = await bffJson<{ requires2fa?: boolean; twoFactorToken?: string }>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+      },
+    );
+    if (result.requires2fa) {
+      if (!result.twoFactorToken) throw new Error("两步验证凭证缺失");
+      await verifyTwoFactor(result.twoFactorToken);
     }
-    return data;
+    return { requires2fa: false };
   },
 
-  /**
-   * 用户注册
-   * 
-   * @param data - 注册信息（用户名、密码、邮箱、所属峰）
-   * @returns 注册成功消息
-   * @throws Error - 用户名或邮箱已存在、验证失败时抛出
-   * 
-   * 使用场景：新用户在注册页面提交注册表单时调用。
-   * 业务逻辑：前端发送 username、password、email、peak 字段；email 为两侧账号唯一标识，注册必填。
-   */
-  register: async (data: RegisterData): Promise<string> => {
-    return request<string>("/user/register", {
+  /** 发送注册邮箱验证码 */
+  sendCode: async (email: string): Promise<void> => {
+    await bffJson("/api/auth/send-code", {
       method: "POST",
-      body: JSON.stringify({
-        username: data.username,
-        password: data.password,
-        email: data.email,
-        peak: data.peak || "无",
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
     });
   },
 
-  /**
-   * 用户登出
-   * 
-   * @returns void
-   * 
-   * 使用场景：用户点击退出登录按钮时调用。
-   * 业务逻辑：调用后端登出接口后，清除本地存储的所有 token 和权限数据。
-   * 注意：即使后端接口调用失败，仍会清除本地数据以确保客户端状态正确。
-   */
+  /** 注册：邮箱 + 密码 + 邮箱验证码；BFF 注册成功后直接写入 Cookie */
+  register: async (data: {
+    email: string;
+    password: string;
+    code: string;
+  }): Promise<string> => {
+    await bffJson("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return "注册成功";
+  },
+
   logout: async (): Promise<void> => {
     try {
-      await request<void>("/user/logout", { method: "POST" }, true);
+      await bffJson("/api/auth/logout", { method: "POST" });
     } finally {
-      clearTokens();
-      clearUserPermissions();
+      clearLegacyAuthStorage();
     }
-  },
-
-  /**
-   * 获取当前存储的 access token
-   * 
-   * @returns access token 字符串，未登录返回 null
-   */
-  getToken,
-
-  /**
-   * 设置 access token
-   * 
-   * @param token - 要存储的 access token
-   */
-  setToken,
-
-  /**
-   * 清除所有 token
-   */
-  clearTokens,
-
-  /**
-   * 客户端快速判断是否已认证（本地 token 存在且未过期）
-   * 
-   * @returns true 表示已认证且 token 有效，false 表示未认证或 token 过期
-   * 
-   * 使用场景：页面路由守卫或组件渲染前判断用户登录状态。
-   * 注意：此判断基于本地缓存，不保证服务端验证通过。
-   */
-  isAuthenticated: (): boolean => {
-    const token = getToken();
-    return token !== null && !isTokenExpired(token);
   },
 };

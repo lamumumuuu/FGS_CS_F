@@ -1,23 +1,12 @@
 // app/api/client/modules/announcement.ts
 
 /**
- * 公告 API 模块
- *
- * 提供公告的 CRUD 接口。
- * 方法命名与 eventApi 保持一致（getPublished / create / update / delete / getMy）。
- *
- * 后端端点（AnnouncementController，前缀 /api/announcements）：
- * - GET    /              获取已发布公告列表（需权限 affair:view）
- * - GET    /{id}          获取公告详情（需权限 affair:view）
- * - POST   /              创建公告（需权限 affair:announce_peak）
- * - PUT    /{id}          更新公告（需权限 affair:manage_own_peak）
- * - DELETE /{id}          删除公告（需权限 affair:manage_own_peak）
- * - GET    /my            获取当前用户发布的公告（需权限 affair:view）
+ * 公告 API 模块（统一后端原生 /api/announcements）。
+ * 对外保持旧端 Announcement 视图模型（global/peak）。
  */
 
-import { request } from "../core/request";
+import { nativeRequest } from "../core/native";
 
-/** 公告实体（与后端 Announcement 实体 + 服务层补充字段对齐） */
 export interface Announcement {
   id: number;
   title: string;
@@ -31,7 +20,6 @@ export interface Announcement {
   updatedAt?: string;
 }
 
-/** 创建公告请求体（与后端 CreateAnnouncementDTO 对齐） */
 export interface CreateAnnouncementRequest {
   title: string;
   content: string;
@@ -39,54 +27,79 @@ export interface CreateAnnouncementRequest {
   peakId?: number;
 }
 
+type Json = Record<string, unknown>;
+
+function transformAnnouncement(raw: unknown): Announcement {
+  const row = (raw ?? {}) as Json;
+  return {
+    id: Number(row.id ?? 0),
+    title: String(row.title ?? ""),
+    content: String(row.content ?? ""),
+    publisherId: Number(row.createdBy ?? row.created_by ?? 0),
+    peakId: row.peakId != null ? Number(row.peakId) : null,
+    type: String(row.visibility ?? "public") === "peak" ? "peak" : "global",
+    status: String(row.status ?? ""),
+    createdAt: (row.createdAt as string | undefined) ?? undefined,
+    updatedAt: (row.updatedAt as string | undefined) ?? undefined,
+  };
+}
+
+function toNativePayload(data: CreateAnnouncementRequest): Json {
+  return {
+    title: data.title,
+    content: data.content,
+    visibility: data.type === "peak" ? "peak" : "public",
+    peakId: data.type === "peak" ? data.peakId : null,
+    status: "published",
+    isActive: true,
+  };
+}
+
 export const announcementApi = {
-  /**
-   * 获取已发布公告列表（需认证，权限：affair:view）
-   */
+  /** 公开生效公告 */
   getPublished: async () => {
-    return await request<Announcement[]>("/announcements", undefined, true);
+    const rows = await nativeRequest<unknown[]>("/api/announcements");
+    return rows.map(transformAnnouncement);
   },
 
-  /**
-   * 获取公告详情（需认证，权限：affair:view）
-   */
-  getById: async (id: number) => {
-    return await request<Announcement>(`/announcements/${id}`, undefined, true);
-  },
+  /** 公告详情（管理视图） */
+  getById: async (id: number) =>
+    transformAnnouncement(await nativeRequest(`/api/announcements/admin/${id}`)),
 
-  /**
-   * 创建公告（需权限：affair:announce_global 或 affair:announce_peak）
-   */
-  create: async (data: CreateAnnouncementRequest) => {
-    return await request<Announcement>("/announcements", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }, true);
-  },
+  /** 创建并发布公告 */
+  create: async (data: CreateAnnouncementRequest) =>
+    transformAnnouncement(
+      await nativeRequest<Json>("/api/announcements/admin", {
+        method: "POST",
+        body: JSON.stringify(toNativePayload(data)),
+      }),
+    ),
 
-  /**
-   * 更新公告（需权限：affair:manage_own_peak）
-   */
-  update: async (id: number, data: CreateAnnouncementRequest) => {
-    return await request<Announcement>(`/announcements/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }, true);
-  },
+  /** 更新公告 */
+  update: async (id: number, data: CreateAnnouncementRequest) =>
+    transformAnnouncement(
+      await nativeRequest<Json>(`/api/announcements/admin/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(toNativePayload(data)),
+      }),
+    ),
 
-  /**
-   * 删除公告（需权限：affair:manage_own_peak）
-   */
-  delete: async (id: number) => {
-    return await request<void>(`/announcements/${id}`, {
-      method: "DELETE",
-    }, true);
-  },
+  delete: (id: number) =>
+    nativeRequest<void>(`/api/announcements/admin/${id}`, { method: "DELETE" }),
 
-  /**
-   * 获取当前用户发布的公告（需认证，权限：affair:view）
-   */
+  /** 管理视图全部公告（旧端“我发布的”在页面上按 publisher 过滤） */
   getMy: async () => {
-    return await request<Announcement[]>("/announcements/my", undefined, true);
+    const rows = await nativeRequest<unknown[]>("/api/announcements/admin");
+    return rows.map(transformAnnouncement);
   },
+
+  publish: async (id: number) =>
+    transformAnnouncement(
+      await nativeRequest<Json>(`/api/announcements/admin/${id}/publish`, { method: "POST" }),
+    ),
+
+  archive: async (id: number) =>
+    transformAnnouncement(
+      await nativeRequest<Json>(`/api/announcements/admin/${id}/archive`, { method: "POST" }),
+    ),
 };

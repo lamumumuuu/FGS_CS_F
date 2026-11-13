@@ -46,12 +46,13 @@ export default function AuthPage() {
   const [loginPassword, setLoginPassword] = useState("");
 
   /* ---------- 注册表单状态 ---------- */
-  const [regUsername, setRegUsername] = useState("");
   const [regEmail, setRegEmail] = useState("");
+  const [regCode, setRegCode] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [studentId, setStudentId] = useState("");
   const [peak, setPeak] = useState("无");
+  const [codeSending, setCodeSending] = useState(false);
 
   /* ---------- 通用状态 ---------- */
   const [loading, setLoading] = useState(false);
@@ -194,11 +195,14 @@ export default function AuthPage() {
     return "";
   }
 
-  /** 验证密码 */
+  /** 验证密码（与统一后端 Password 强度规则一致） */
   function validatePassword(value: string): string {
     if (!value) return "请输入密码";
-    if (value.length < 6) return "密码至少6个字符";
-    if (value.length > 20) return "密码最多20个字符";
+    if (value.length < 8) return "密码至少8个字符";
+    if (value.length > 72) return "密码最多72个字符";
+    if (!/\d/.test(value)) return "密码必须包含至少一个数字";
+    if (!/[a-zA-Z]/.test(value)) return "密码必须包含至少一个字母";
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) return "密码必须包含至少一个特殊字符";
     return "";
   }
 
@@ -255,28 +259,49 @@ export default function AuthPage() {
   /* ------------------------------------------------------------------ */
   /*  注册处理                                                          */
   /* ------------------------------------------------------------------ */
+  async function handleSendCode() {
+    const eErr = validateEmail(regEmail);
+    setEmailError(eErr);
+    if (eErr) return;
+    setCodeSending(true);
+    try {
+      await userApi.sendCode(regEmail.trim());
+      alert("验证码已发送，请查收邮箱");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "发送验证码失败");
+    } finally {
+      setCodeSending(false);
+    }
+  }
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
-    const uErr = validateUsername(regUsername);
     const eErr = validateEmail(regEmail);
     const pErr = validatePassword(regPassword);
     const cpErr = validateConfirmPassword(regConfirmPassword, regPassword);
-    setUsernameError(uErr);
+    const cErr = regCode.trim() ? "" : "请输入邮箱验证码";
     setEmailError(eErr);
     setPasswordError(pErr);
     setConfirmPasswordError(cpErr);
-    if (uErr || eErr || pErr || cpErr) return;
+    if (eErr || pErr || cpErr || cErr) {
+      if (cErr) setError(cErr);
+      return;
+    }
 
     setLoading(true);
     try {
-      await userApi.register({ username: regUsername, password: regPassword, email: regEmail.trim(), studentId, peak });
-      alert("注册成功，请登录");
-      // 切换到登录模式
-      handleModeSwitch("login");
-      setRegUsername("");
+      await userApi.register({
+        email: regEmail.trim(),
+        password: regPassword,
+        code: regCode.trim(),
+      });
+      await refreshPermissions();
+      alert("注册成功，已自动登录");
+      router.push("/");
       setRegEmail("");
+      setRegCode("");
       setRegPassword("");
       setRegConfirmPassword("");
       setStudentId("");
@@ -469,24 +494,6 @@ export default function AuthPage() {
             {mode === "register" && showForm && (
               <form onSubmit={handleRegister} className="space-y-4 pt-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">用户名</label>
-                  <input
-                    type="text"
-                    value={regUsername}
-                    onChange={(e) => {
-                      setRegUsername(e.target.value);
-                      if (usernameError) setUsernameError(validateUsername(e.target.value));
-                    }}
-                    onBlur={() => setUsernameError(validateUsername(regUsername))}
-                    placeholder="请输入用户名（2-20字符）"
-                    className={`w-full px-4 py-3 bg-transparent border border-dashed rounded-none focus:outline-none focus:ring-0 transition-all ${usernameError ? "border-red-400" : "border-[#cfc7ba]"
-                      }`}
-                    required
-                  />
-                  {usernameError && <p className="mt-1 text-xs text-red-500">{usernameError}</p>}
-                </div>
-
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
                   <input
                     type="email"
@@ -502,6 +509,28 @@ export default function AuthPage() {
                     required
                   />
                   {emailError && <p className="mt-1 text-xs text-red-500">{emailError}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">邮箱验证码</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={regCode}
+                      onChange={(e) => setRegCode(e.target.value)}
+                      placeholder="请输入 6 位验证码"
+                      className="flex-1 px-4 py-3 bg-transparent border border-dashed border-[#cfc7ba] rounded-none focus:outline-none focus:ring-0 transition-all"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendCode}
+                      disabled={codeSending}
+                      className="px-4 py-3 bg-gray-700 text-white text-sm font-medium hover:bg-gray-900 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {codeSending ? "发送中..." : "发送验证码"}
+                    </button>
+                  </div>
                 </div>
 
                 <div>

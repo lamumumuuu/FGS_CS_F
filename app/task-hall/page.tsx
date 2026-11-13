@@ -66,6 +66,22 @@ export default function TaskHall() {
   const [pendingCount, setPendingCount] = useState(0);
 
   /* ------------------------------------------------------------------ */
+  /*  全屏背景：固定到视口，滚动/触顶回弹时不露出页面外层背景          */
+  /* ------------------------------------------------------------------ */
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlBg = html.style.backgroundColor;
+    const prevBodyBg = body.style.backgroundColor;
+    html.style.backgroundColor = "#1d140b";
+    body.style.backgroundColor = "#1d140b";
+    return () => {
+      html.style.backgroundColor = prevHtmlBg;
+      body.style.backgroundColor = prevBodyBg;
+    };
+  }, []);
+
+  /* ------------------------------------------------------------------ */
   /*  数据获取：当筛选条件变化时重新请求任务列表                     */
   /* ------------------------------------------------------------------ */
   useEffect(() => {
@@ -241,6 +257,9 @@ export default function TaskHall() {
   /* ------------------------------------------------------------------ */
   const pageBackgroundStyle: React.CSSProperties = {
     background: "radial-gradient(ellipse at 30% 35%, #291b0f 0%, #1d140b 70%)",
+    backgroundColor: "#1d140b",
+    // 固定到视口：页面滚动时渐变不平移，底部不会出现另一层背景
+    backgroundAttachment: "fixed",
   };
 
   /* ------------------------------------------------------------------ */

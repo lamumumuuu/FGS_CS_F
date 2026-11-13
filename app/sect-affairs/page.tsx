@@ -147,8 +147,21 @@ export default function SectAffairs() {
             <h1 className="text-3xl font-bold" style={{ color: "#1a4a3a" }}>宗门事务</h1>
             <p className="text-sm mt-1" style={{ color: "#5a7a6a" }}>旋转卷轴浏览诸峰，点击卡片查看峰内详情</p>
           </div>
-          <div className="text-xs hidden sm:flex items-center gap-3" style={{ color: "#5a7a6a" }}>
-            <span className="text-gray-400">·</span><span>共 {totalCards - 1} 页</span>
+          <div className="flex items-center gap-4">
+            {/* 角色权限管理入口：数据库不再有「管理台」峰，改由权限驱动显式入口 */}
+            {canManagePermissions && (
+              <button
+                type="button"
+                onClick={() => setShowRolePermissionModal(true)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #0D9488 0%, #14B8A6 100%)" }}
+              >
+                角色权力调整
+              </button>
+            )}
+            <div className="text-xs hidden sm:flex items-center gap-3" style={{ color: "#5a7a6a" }}>
+              <span className="text-gray-400">·</span><span>共 {totalCards - 1} 页</span>
+            </div>
           </div>
         </div>
 

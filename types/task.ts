@@ -3,8 +3,16 @@
 /** 任务难度 */
 export type TaskDifficulty = "黑铁" | "青铜" | "白银" | "黄金";
 
-/** 任务生命周期状态 */
-export type TaskStatus = "审核中" | "等待中" | "讨伐中" | "已提交" | "已完成" | "已驳回";
+/** 任务生命周期状态（旧端展示文案；内部由原生状态映射） */
+export type TaskStatus =
+  | "审核中"
+  | "等待中"
+  | "讨伐中"
+  | "已提交"
+  | "已完成"
+  | "已驳回"
+  | "已结束"
+  | "已过期";
 
 /** 发布者简要信息 */
 export interface TaskPublisher {
@@ -46,6 +54,8 @@ export interface Task {
   submissionDescription?: string;
   /** 提交成果附件链接（勇者提交悬赏时填写的附件URL） */
   attachmentUrl?: string;
+  /** 统一后端版本号（编辑/归档 If-Match） */
+  version?: number;
 }
 
 /** 任务列表筛选条件 */

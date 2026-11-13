@@ -113,11 +113,11 @@ export function AddDiscipleForm({
           </div>
         )}
         <div className="text-xs text-teal-700 px-3 py-2.5 rounded-lg border" style={{ backgroundColor: "rgba(15, 118, 110, 0.08)", borderColor: "rgba(15, 118, 110, 0.15)" }}>
-          <span className="font-semibold">💡 自动创建账号</span>：添加弟子将同时创建用户账号，默认密码为 <span className="font-mono font-bold text-teal-800">123456</span>，弟子可使用此账号登录系统。
+          <span className="font-semibold">💡 统一账号体系</span>：成员需先自行注册账号，此处输入其<span className="font-semibold">登录用户名</span>建立成员档案，不再创建默认密码账号。
         </div>
         <div>
           <label className="block text-sm font-semibold mb-1.5" style={{ color: "#0F766E" }}>
-            弟子姓名 <span className="text-red-500">*</span>
+            登录用户名 <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -125,7 +125,7 @@ export function AddDiscipleForm({
             onChange={(e) => onFormChange({ ...formData, name: e.target.value })}
             className={inputClass}
             style={{ ...inputStyle, borderWidth: "2px" }}
-            placeholder="请输入弟子姓名（将作为登录账号）"
+            placeholder="请输入已注册账号的登录用户名"
             maxLength={20}
           />
           <p className="text-xs text-gray-400 mt-1">{formData.name.length}/20 字符</p>
@@ -229,16 +229,17 @@ export function EditDiscipleForm({
         )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            弟子姓名 <span className="text-red-500">*</span>
+            账号名称
           </label>
           <input
             type="text"
             value={formData.name}
-            onChange={(e) => onFormChange({ ...formData, name: e.target.value })}
+            disabled
             className={inputClass}
             style={inputStyle}
-            placeholder="请输入弟子姓名"
+            placeholder="账号资料由用户中心维护"
           />
+          <p className="text-xs text-gray-400 mt-1">账号资料请由本人通过用户中心修改</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -257,18 +258,14 @@ export function EditDiscipleForm({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             担当角色
           </label>
-          <select
+          <input
+            type="text"
             value={formData.role}
-            onChange={(e) => onFormChange({ ...formData, role: e.target.value as SectRole })}
+            disabled
             className={inputClass}
             style={inputStyle}
-          >
-            {ROLE_OPTIONS.map((role) => (
-              <option key={role} value={role}>
-                {role}
-              </option>
-            ))}
-          </select>
+          />
+          <p className="text-xs text-gray-400 mt-1">角色由统一授权中心按绑定范围管理</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -403,7 +400,7 @@ export function DeleteDiscipleForm({
           </div>
         )}
         <div className="text-center py-2">
-          <div className="text-red-500 text-sm">⚠️ 警告：此操作将级联删除用户账号及所有关联数据</div>
+          <div className="text-red-500 text-sm">⚠️ 此操作将结束成员关系；账号、余额与历史记录保留</div>
           <div className="text-xl font-bold text-gray-800 mt-2">
             {disciple.name}
           </div>

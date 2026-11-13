@@ -1,184 +1,159 @@
 // types/permissions.ts
 
 /**
- * 权限常量定义
- * 所有后端权限 ID 在此集中声明，便于前后端对应和维护
+ * 权限常量定义（统一后端原生权限名）
+ *
+ * 常量键沿用旧页面命名以减少改动，值已切换为 FastAPI RBAC 的统一权限名，
+ * 不再依赖 Java quest:* / affair:* 字面量。
  */
 
 export const QUEST_PERMISSIONS = {
-  VIEW_ALL: "quest:view_all",
-  VIEW_OWN_PEAK: "quest:view_own_peak",
-  PUBLISH_GLOBAL: "quest:publish_global",
-  PUBLISH_PEAK: "quest:publish_peak",
-  PUBLISH_DRAFT: "quest:publish_draft",
-  REVIEW: "quest:review",
-  EDIT_ANY: "quest:edit_any",
-  EDIT_OWN_PEAK: "quest:edit_own_peak",
-  DELETE_ANY: "quest:delete_any",
-  DELETE_OWN_PEAK: "quest:delete_own_peak",
-  ACCEPT: "quest:accept",
-  SUBMIT: "quest:submit",
-  REVIEW_RESULT: "quest:review_result",
-  FORCE_CLOSE: "quest:force_close",
+  VIEW_ALL: "task:read",
+  VIEW_OWN_PEAK: "task:read",
+  PUBLISH_GLOBAL: "task:create",
+  PUBLISH_PEAK: "task:create",
+  PUBLISH_DRAFT: "task:publish",
+  REVIEW: "task:review",
+  EDIT_ANY: "task:update",
+  EDIT_OWN_PEAK: "task:update",
+  DELETE_ANY: "task:delete",
+  DELETE_OWN_PEAK: "task:delete",
+  ACCEPT: "task:claim",
+  SUBMIT: "task:submit",
+  REVIEW_RESULT: "task:accept",
+  FORCE_CLOSE: "task:close",
 } as const;
 
 export const MEMBER_PERMISSIONS = {
-  VIEW_ALL: "member:view_all",
-  VIEW_OWN_PEAK: "member:view_own_peak",
-  APPROVE_JOIN: "member:approve_join",
-  UPDATE_ROLE: "member:update_role",
-  APPOINT_ELDER: "member:appoint_elder",
-  EXPEL: "member:expel",
+  VIEW_ALL: "member:read",
+  VIEW_OWN_PEAK: "member:read",
+  APPROVE_JOIN: "member:approve",
+  UPDATE_ROLE: "member:update",
+  APPOINT_ELDER: "member:update",
+  EXPEL: "member:remove",
 } as const;
 
 export const AFFAIR_PERMISSIONS = {
-  VIEW: "affair:view",
-  ANNOUNCE_GLOBAL: "affair:announce_global",
-  ANNOUNCE_PEAK: "affair:announce_peak",
-  CREATE_EVENT: "affair:create_event",
-  MANAGE_ALL_EVENTS: "affair:manage_all_events",
-  MANAGE_OWN_PEAK: "affair:manage_own_peak",
+  VIEW: "announcement:read",
+  ANNOUNCE_GLOBAL: "announcement:create",
+  ANNOUNCE_PEAK: "announcement:create",
+  CREATE_EVENT: "event:create",
+  MANAGE_ALL_EVENTS: "event:update",
+  MANAGE_OWN_PEAK: "event:update",
 } as const;
 
 export const PEAK_PERMISSIONS = {
-  VIEW: "peak:view",
+  VIEW: "peak:read",
   CREATE_DISBAND: "peak:create",
-  EDIT_ANY: "peak:edit_any",
-  EDIT_OWN: "peak:edit_own",
-  MANAGE_MEMBERS: "peak:manage_members",
+  EDIT_ANY: "peak:update",
+  EDIT_OWN: "peak:update",
+  MANAGE_MEMBERS: "member:move",
 } as const;
 
 export const FINANCE_PERMISSIONS = {
-  VIEW_ALL: "finance:view_all",
-  VIEW_OWN_PEAK: "finance:view_own_peak",
-  ADJUST_LINGSHI: "finance:adjust_lingshi",
+  VIEW_ALL: "finance:read",
+  VIEW_OWN_PEAK: "finance:read",
+  ADJUST_LINGSHI: "finance:adjust",
 } as const;
 
 export const SYSTEM_PERMISSIONS = {
-  ADMIN: "system:admin",
+  ADMIN: "role:manage_permissions",
 } as const;
 
-/**
- * 权限分组描述
- * 用于前端展示权限说明
- */
+/** 权限说明（按统一后端权限名去重） */
 export const PERMISSION_DESCRIPTIONS: Record<string, string> = {
-  // 任务大厅
-  [QUEST_PERMISSIONS.VIEW_ALL]: "查看所有任务",
-  [QUEST_PERMISSIONS.VIEW_OWN_PEAK]: "查看本峰任务",
-  [QUEST_PERMISSIONS.PUBLISH_GLOBAL]: "发布全协会悬赏",
-  [QUEST_PERMISSIONS.PUBLISH_PEAK]: "发布本峰悬赏",
-  [QUEST_PERMISSIONS.PUBLISH_DRAFT]: "发布任务草稿",
-  [QUEST_PERMISSIONS.EDIT_ANY]: "编辑任意任务",
-  [QUEST_PERMISSIONS.EDIT_OWN_PEAK]: "编辑本峰任务",
-  [QUEST_PERMISSIONS.DELETE_ANY]: "删除任意任务",
-  [QUEST_PERMISSIONS.DELETE_OWN_PEAK]: "删除本峰任务",
-  [QUEST_PERMISSIONS.ACCEPT]: "接取任务",
-  [QUEST_PERMISSIONS.SUBMIT]: "提交任务",
-  [QUEST_PERMISSIONS.REVIEW_RESULT]: "成果审核/验收任务",
-  [QUEST_PERMISSIONS.FORCE_CLOSE]: "强制结项",
+  "task:read": "查看任务",
+  "task:create": "创建任务",
+  "task:update": "编辑任务",
+  "task:delete": "归档任务",
+  "task:publish": "申请上架",
+  "task:claim": "接取任务",
+  "task:submit": "提交成果",
+  "task:review": "上架审核",
+  "task:accept": "成果验收",
+  "task:close": "强制结项",
 
-  // 成员管理
-  [MEMBER_PERMISSIONS.VIEW_ALL]: "查看全协会成员",
-  [MEMBER_PERMISSIONS.VIEW_OWN_PEAK]: "查看本峰成员",
-  [MEMBER_PERMISSIONS.APPROVE_JOIN]: "审批入会申请",
-  [MEMBER_PERMISSIONS.UPDATE_ROLE]: "修改成员角色",
-  [MEMBER_PERMISSIONS.APPOINT_ELDER]: "任命/撤换长老",
-  [MEMBER_PERMISSIONS.EXPEL]: "开除成员",
+  "member:read": "查看成员",
+  "member:approve": "审批入会",
+  "member:update": "修改成员资料/归属",
+  "member:remove": "成员离会",
 
-  // 宗门事务
-  [AFFAIR_PERMISSIONS.ANNOUNCE_GLOBAL]: "发布宗门公告",
-  [AFFAIR_PERMISSIONS.ANNOUNCE_PEAK]: "发布本峰公告",
-  [AFFAIR_PERMISSIONS.CREATE_EVENT]: "创建活动",
-  [AFFAIR_PERMISSIONS.MANAGE_ALL_EVENTS]: "管理所有活动",
-  [AFFAIR_PERMISSIONS.MANAGE_OWN_PEAK]: "管理本峰活动",
+  "announcement:read": "查看公告",
+  "announcement:create": "创建公告",
+  "event:create": "创建活动",
+  "event:update": "编辑活动",
 
-  // 峰管理
-  [PEAK_PERMISSIONS.CREATE_DISBAND]: "创建/解散峰",
-  [PEAK_PERMISSIONS.EDIT_ANY]: "修改任意峰信息",
-  [PEAK_PERMISSIONS.EDIT_OWN]: "修改本峰信息",
-  [PEAK_PERMISSIONS.MANAGE_MEMBERS]: "峰成员管理",
+  "peak:read": "查看峰",
+  "peak:create": "创建峰",
+  "peak:update": "编辑峰",
 
-  // 财务管理
-  [FINANCE_PERMISSIONS.VIEW_ALL]: "查看全协会财务",
-  [FINANCE_PERMISSIONS.VIEW_OWN_PEAK]: "查看本峰财务",
-  [FINANCE_PERMISSIONS.ADJUST_LINGSHI]: "调整灵石",
+  "finance:read": "查看财务",
+  "finance:adjust": "发行/回收",
 
-  // 系统管理
-  [SYSTEM_PERMISSIONS.ADMIN]: "系统管理（角色权限调整）",
+  "role:manage_permissions": "角色权限管理",
 };
 
-/**
- * 权限分组
- * 用于权限管理页面展示
- */
+/** 权限分组（统一权限名，供管理页展示） */
 export const PERMISSION_GROUPS = [
   {
-    key: "quest",
-    name: "任务大厅",
+    key: "task",
+    name: "任务",
     permissions: [
-      QUEST_PERMISSIONS.VIEW_ALL,
-      QUEST_PERMISSIONS.VIEW_OWN_PEAK,
-      QUEST_PERMISSIONS.PUBLISH_GLOBAL,
-      QUEST_PERMISSIONS.PUBLISH_PEAK,
-      QUEST_PERMISSIONS.PUBLISH_DRAFT,
-      QUEST_PERMISSIONS.EDIT_ANY,
-      QUEST_PERMISSIONS.EDIT_OWN_PEAK,
-      QUEST_PERMISSIONS.DELETE_ANY,
-      QUEST_PERMISSIONS.DELETE_OWN_PEAK,
-      QUEST_PERMISSIONS.ACCEPT,
-      QUEST_PERMISSIONS.SUBMIT,
-      QUEST_PERMISSIONS.REVIEW_RESULT,
-      QUEST_PERMISSIONS.FORCE_CLOSE,
+      "task:read",
+      "task:create",
+      "task:update",
+      "task:delete",
+      "task:publish",
+      "task:claim",
+      "task:submit",
+      "task:review",
+      "task:accept",
+      "task:close",
     ],
   },
   {
     key: "member",
-    name: "成员管理",
+    name: "成员",
+    permissions: ["member:read", "member:approve", "member:update", "member:remove"],
+  },
+  {
+    key: "content",
+    name: "公告与活动",
     permissions: [
-      MEMBER_PERMISSIONS.VIEW_ALL,
-      MEMBER_PERMISSIONS.VIEW_OWN_PEAK,
-      MEMBER_PERMISSIONS.APPROVE_JOIN,
-      MEMBER_PERMISSIONS.UPDATE_ROLE,
-      MEMBER_PERMISSIONS.APPOINT_ELDER,
-      MEMBER_PERMISSIONS.EXPEL,
+      "announcement:read",
+      "announcement:create",
+      "announcement:update",
+      "announcement:delete",
+      "announcement:publish",
+      "announcement:archive",
+      "event:read",
+      "event:create",
+      "event:update",
+      "event:delete",
+      "event:publish",
+      "event:close",
+      "event:manage_registration",
     ],
   },
   {
-    key: "affair",
-    name: "宗门事务",
-    permissions: [
-      AFFAIR_PERMISSIONS.ANNOUNCE_GLOBAL,
-      AFFAIR_PERMISSIONS.ANNOUNCE_PEAK,
-      AFFAIR_PERMISSIONS.CREATE_EVENT,
-      AFFAIR_PERMISSIONS.MANAGE_ALL_EVENTS,
-      AFFAIR_PERMISSIONS.MANAGE_OWN_PEAK,
-    ],
-  },
-  {
-    key: "peak",
-    name: "峰管理",
-    permissions: [
-      PEAK_PERMISSIONS.CREATE_DISBAND,
-      PEAK_PERMISSIONS.EDIT_ANY,
-      PEAK_PERMISSIONS.EDIT_OWN,
-      PEAK_PERMISSIONS.MANAGE_MEMBERS,
-    ],
+    key: "organization",
+    name: "组织",
+    permissions: ["peak:read", "peak:create", "peak:update", "peak:archive"],
   },
   {
     key: "finance",
-    name: "财务管理",
+    name: "财务",
     permissions: [
-      FINANCE_PERMISSIONS.VIEW_ALL,
-      FINANCE_PERMISSIONS.VIEW_OWN_PEAK,
-      FINANCE_PERMISSIONS.ADJUST_LINGSHI,
+      "finance:read",
+      "finance:allocate",
+      "finance:transfer",
+      "finance:adjust",
+      "finance:reconcile",
     ],
   },
   {
     key: "system",
-    name: "系统管理",
-    permissions: [
-      SYSTEM_PERMISSIONS.ADMIN,
-    ],
+    name: "系统",
+    permissions: ["role:manage_permissions", "audit:read"],
   },
 ];

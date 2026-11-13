@@ -424,6 +424,7 @@ function getRoleStyle(role: SectRole): React.CSSProperties {
     "长老": { backgroundColor: "rgba(59, 130, 246, 0.1)", color: "#2563EB", borderColor: "rgba(59, 130, 246, 0.3)" },
     "内门弟子": { backgroundColor: "rgba(13, 148, 136, 0.1)", color: "#0D9488", borderColor: "rgba(13, 148, 136, 0.3)" },
     "外门弟子": { backgroundColor: "rgba(16, 185, 129, 0.1)", color: "#059669", borderColor: "rgba(16, 185, 129, 0.3)" },
+    "成员": { backgroundColor: "rgba(100, 116, 139, 0.1)", color: "#475569", borderColor: "rgba(100, 116, 139, 0.3)" },
   };
   return styles[role] || styles["外门弟子"];
 }

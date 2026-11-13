@@ -25,6 +25,10 @@ export interface MemberUser {
   peak: string;
   lingshi: number;
   user: string;
+  /** 统一用户 id（原 discipleId 语义，用于峰内分配） */
+  userId?: number;
+  /** 个人钱包账户 id（峰→成员分配的目标账户） */
+  accountId?: number;
 }
 
 export interface LingshiAdjustment {
@@ -55,6 +59,8 @@ const ADJUSTMENT_TYPE_MAP: Record<string, { label: string; color: string }> = {
   peak_return_in: { label: "灵石退回收入", color: "#92400e" },
   peak_return_out: { label: "灵石退回", color: "#b45309" },
   allocate_to_member: { label: "峰灵石分配", color: "#0D9488" },
+  transfer: { label: "灵石转账", color: "#475569" },
+  reserve: { label: "任务托管", color: "#7C3AED" },
 };
 
 export { ADJUSTMENT_TYPE_MAP };

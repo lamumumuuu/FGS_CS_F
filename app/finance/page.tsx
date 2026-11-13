@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { usePermission } from "@/contexts/PermissionContext";
-import { request } from "@/app/api/client/core/request";
 import { financeApi } from "@/app/api/client";
 import { FINANCE_PERMISSIONS } from "@/types/permissions";
 import Modal from "@/components/Modal";
@@ -36,7 +35,7 @@ const PEAK_NAMES: Record<number, string> = {
 };
 
 export default function FinancePage() {
-  const { hasPermission, isAuthenticated, loading: permLoading, peakIds, refreshPermissions, user } = usePermission();
+  const { hasPermission, isAuthenticated, loading: permLoading, peakIds, isGlobal, refreshPermissions, user } = usePermission();
 
   const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [activeTab, setActiveTab] = useState<TabType>("overview");
@@ -59,6 +58,8 @@ export default function FinancePage() {
   const [peakMembers, setPeakMembers] = useState<MemberUser[]>([]);
   // 当前峰可支配灵石
   const [currentPeakDisposable, setCurrentPeakDisposable] = useState<number>(0);
+  // 当前峰名称（来自统一组织口径，避免前端硬编码峰名）
+  const [currentPeakName, setCurrentPeakName] = useState<string | null>(null);
 
   // 分配弹窗
   const [showAllocateModal, setShowAllocateModal] = useState(false);
@@ -102,7 +103,8 @@ export default function FinancePage() {
   // 二次确认状态
   const [allocateMemberConfirmed, setAllocateMemberConfirmed] = useState(false);
 
-  const canViewAll = hasPermission(FINANCE_PERMISSIONS.VIEW_ALL);
+  // 全部财务需要 all 作用范围；仅峰范围绑定只能进入峰财务视图
+  const canViewAll = hasPermission(FINANCE_PERMISSIONS.VIEW_ALL) && isGlobal;
   const canViewOwnPeak = hasPermission(FINANCE_PERMISSIONS.VIEW_OWN_PEAK);
   const canAdjustLingshi = hasPermission(FINANCE_PERMISSIONS.ADJUST_LINGSHI);
 
@@ -111,10 +113,15 @@ export default function FinancePage() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  // 仅峰范围的账号默认进入峰财务视图，避免停留在不可用的全范围视图
+  useEffect(() => {
+    if (!canViewAll && canViewOwnPeak) setViewMode("peak");
+  }, [canViewAll, canViewOwnPeak]);
+
   /* ---------- 数据加载 ---------- */
   const loadTotalDisposable = async () => {
     try {
-      const data = await request<{ total: number }>("/finance/total-disposable", undefined, true);
+      const data = await financeApi.getTotalDisposable();
       setTotalDisposable(data?.total ?? 0);
     } catch (err) {
       console.error("加载总可支配灵石失败:", err);
@@ -123,8 +130,16 @@ export default function FinancePage() {
 
   const loadPeaksData = async () => {
     try {
-      const data = await request<PeakData[]>("/finance/peaks", undefined, true);
-      setPeaksData(data || []);
+      const rows = await financeApi.getPeaksFinanceData();
+      setPeaksData(
+        rows.map((row) => ({
+          peakId: row.peakId,
+          peakName: row.peakName,
+          availableLingshi: row.balance,
+          totalLingshi: row.balance,
+          discipleCount: row.memberCount,
+        }))
+      );
     } catch (err) {
       console.error("加载峰数据失败:", err);
     }
@@ -132,8 +147,19 @@ export default function FinancePage() {
 
   const loadPeakMembers = async (peakId: number) => {
     try {
-      const data = await request<MemberUser[]>(`/finance/peak/${peakId}/members`, undefined, true);
-      setPeakMembers(data || []);
+      const rows = await financeApi.getPeakMembers(peakId);
+      setPeakMembers(
+        rows.map((row) => ({
+          discipleId: row.userId,
+          userId: row.userId,
+          accountId: row.accountId ?? undefined,
+          name: row.displayName || row.username,
+          role: "成员",
+          peak: "",
+          lingshi: row.balance,
+          user: row.username,
+        }))
+      );
     } catch (err) {
       console.error("加载峰成员失败:", err);
     }
@@ -142,10 +168,11 @@ export default function FinancePage() {
   const loadCurrentPeakData = async () => {
     if (peakIds.length === 0) return;
     try {
-      const data = await request<PeakData>(`/finance/peak/${peakIds[0]}`, undefined, true);
+      const data = await financeApi.getPeakData(peakIds[0]);
       if (data) {
-        setCurrentPeakDisposable(data.availableLingshi ?? 0);
-        loadPeakMembers(peakIds[0]);
+        setCurrentPeakName(data.peakName);
+        setCurrentPeakDisposable(data.balance ?? 0);
+        await loadPeakMembers(peakIds[0]);
       }
     } catch (err) {
       console.error("加载当前峰数据失败:", err);
@@ -177,31 +204,17 @@ export default function FinancePage() {
       const effectiveCategory = category || adjustmentCategory;
       const effectiveType = type || adjustmentType;
 
-      // 合并类型（reward / peak_transfer / peak_return）需要前端过滤：
-      // API 不传 type 参数，获取全部后在前端按多个 type 值过滤
-      const isMergedType =
-        effectiveType === "reward" ||
-        effectiveType === "peak_transfer" ||
-        effectiveType === "peak_return";
-      const apiType = isMergedType ? "all" : effectiveType;
+      // 统一账本：全范围读全量流水；峰范围传 peakId，由后端按账户范围过滤
+      const rows =
+        mode === "peak" && peakIds.length > 0
+          ? await financeApi.listAdjustments({ peakId: peakIds[0] })
+          : await financeApi.listAdjustments();
 
-      // 峰财务模式：使用 /finance/peak-adjustments 端点（仅需 view_own_peak 权限）
-      // 全部财务模式：使用 /finance/adjustments 端点（需 view_all 权限）
-      if (mode === "peak") {
-        const params: string[] = [];
-        if (apiType !== "all") params.push(`type=${apiType}`);
-        const query = params.length > 0 ? `?${params.join("&")}` : "";
-        const data = await request<LingshiAdjustment[]>(`/finance/peak-adjustments${query}`, undefined, true);
-        setAdjustments(isMergedType ? filterAdjustmentsByType(data || [], effectiveType) : (data || []));
-      } else {
-        // 构建查询参数
-        const params: string[] = [];
-        if (apiType !== "all") params.push(`type=${apiType}`);
-        if (effectiveCategory !== "all") params.push(`category=${effectiveCategory}`);
-        const query = params.length > 0 ? `?${params.join("&")}` : "";
-        const data = await request<LingshiAdjustment[]>(`/finance/adjustments${query}`, undefined, true);
-        setAdjustments(isMergedType ? filterAdjustmentsByType(data || [], effectiveType) : (data || []));
+      let data = rows as LingshiAdjustment[];
+      if (effectiveCategory === "personal") {
+        data = rows.filter((row) => row.accountKind === "user") as LingshiAdjustment[];
       }
+      setAdjustments(filterAdjustmentsByType(data, effectiveType));
     } catch (err) {
       console.error("加载调整记录失败:", err);
     }
@@ -256,18 +269,11 @@ export default function FinancePage() {
     }
     setAllocateSubmitting(true);
     try {
-      await request<{ success: boolean }>(
-        "/finance/allocate-to-peak",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            peakId: allocatingPeak.peakId,
-            amount: allocateAmount,
-            remark: allocateRemark,
-          }),
-        },
-        true
-      );
+      await financeApi.allocateToPeak({
+        peakId: allocatingPeak.peakId,
+        amount: allocateAmount,
+        remark: allocateRemark,
+      });
       showToast(`已向 ${allocatingPeak.peakName} 分配 ${allocateAmount} 灵石`, "success");
       setShowAllocateModal(false);
       await loadAllData();
@@ -306,19 +312,12 @@ export default function FinancePage() {
     }
     setTransferSubmitting(true);
     try {
-      await request<{ success: boolean }>(
-        "/finance/peak-transfer",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            fromPeakId: transferFromPeak.peakId,
-            toPeakId: transferToPeak.peakId,
-            amount: transferAmount,
-            remark: transferRemark,
-          }),
-        },
-        true
-      );
+      await financeApi.peakTransfer({
+        fromPeakId: transferFromPeak.peakId,
+        toPeakId: transferToPeak.peakId,
+        amount: transferAmount,
+        remark: transferRemark,
+      });
       showToast(`已从 ${transferFromPeak.peakName} 调拨 ${transferAmount} 灵石至 ${transferToPeak.peakName}`, "success");
       setShowTransferModal(false);
       await loadAllData();
@@ -351,18 +350,11 @@ export default function FinancePage() {
     }
     setAdjustTotalSubmitting(true);
     try {
-      await request<{ success: boolean }>(
-        "/finance/adjust-total-disposable",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            type: adjustTotalType,
-            amount: adjustTotalAmount,
-            remark: adjustTotalRemark,
-          }),
-        },
-        true
-      );
+      await financeApi.adjustTotalDisposable({
+        type: adjustTotalType,
+        amount: adjustTotalAmount,
+        remark: adjustTotalRemark,
+      });
       showToast(
         `${adjustTotalType === "in" ? "增加" : "减少"} ${adjustTotalAmount} 灵石成功`,
         "success"
@@ -403,20 +395,13 @@ export default function FinancePage() {
     }
     setReturnPeakSubmitting(true);
     try {
-      await request<{ success: boolean }>(
-        "/finance/return-from-peak",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            peakId: peakIds[0],
-            amount: returnPeakAmount,
-            remark: returnPeakRemark,
-          }),
-        },
-        true
-      );
+      await financeApi.returnFromPeak({
+        peakId: peakIds[0],
+        amount: returnPeakAmount,
+        remark: returnPeakRemark,
+      });
       showToast(
-        `已将 ${returnPeakAmount} 灵石从 ${currentPeakName || "当前峰"} 退回至总库`,
+        `已将 ${returnPeakAmount} 灵石从 ${displayPeakName || "当前峰"} 退回至总库`,
         "success"
       );
       setShowReturnPeakModal(false);
@@ -458,19 +443,16 @@ export default function FinancePage() {
     }
     setAllocateMemberSubmitting(true);
     try {
-      await request<{ success: boolean }>(
-        "/finance/allocate-to-member",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            peakId: peakIds[0],
-            discipleId: allocatingMember.discipleId,
-            amount: allocateMemberAmount,
-            remark: allocateMemberRemark,
-          }),
-        },
-        true
-      );
+      if (!allocatingMember.accountId) {
+        setAllocateMemberError("该成员尚未建立钱包账户，无法分配");
+        return;
+      }
+      await financeApi.allocateToMember({
+        peakId: peakIds[0],
+        accountId: allocatingMember.accountId,
+        amount: allocateMemberAmount,
+        remark: allocateMemberRemark,
+      });
       showToast(
         `已向 ${allocatingMember.name} 分配 ${allocateMemberAmount} 灵石`,
         "success"
@@ -522,7 +504,9 @@ export default function FinancePage() {
     );
   }
 
-  const currentPeakName = peakIds.length > 0 ? (PEAK_NAMES[peakIds[0]] || `峰 ${peakIds[0]}`) : null;
+  // 峰名称优先用统一组织口径；接口不可用时回退本地映射
+  const displayPeakName =
+    currentPeakName || (peakIds.length > 0 ? PEAK_NAMES[peakIds[0]] || `峰 ${peakIds[0]}` : null);
 
   return (
     <div
@@ -653,7 +637,7 @@ export default function FinancePage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-shan mb-2" style={{ color: "#5a7a6a" }}>
-                  {currentPeakName || "当前峰"} · 可支配灵石
+                  {displayPeakName || "当前峰"} · 可支配灵石
                 </div>
                 <div
                   className="text-5xl font-bold font-shan"
@@ -879,7 +863,7 @@ export default function FinancePage() {
                         </h3>
                       </div>
                       <div className="text-sm" style={{ color: "#5a7a6a" }}>
-                        成员：{peak.discipleCount} 人 · 累计灵石：{peak.totalLingshi.toLocaleString()}
+                        成员：{peak.discipleCount} 人 · 账户余额：{peak.totalLingshi.toLocaleString()}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">

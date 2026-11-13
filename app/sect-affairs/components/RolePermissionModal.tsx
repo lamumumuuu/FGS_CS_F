@@ -14,6 +14,8 @@
 import { useState, useEffect } from "react";
 import Modal from "@/components/Modal";
 import DeletePeakModal from "@/app/sect-affairs/components/DeletePeakModal";
+import UserBindingModal from "@/app/sect-affairs/components/UserBindingModal";
+import OrgHistoryModal from "@/app/sect-affairs/components/OrgHistoryModal";
 import { Role, Permission } from "@/types/rbac";
 import { PeakInfo } from "@/types/sect";
 import { rbacApi, sectApi } from "@/app/api/client";
@@ -47,6 +49,121 @@ export default function RolePermissionModal({
   const [peaks, setPeaks] = useState<PeakInfo[]>([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedPeak, setSelectedPeak] = useState<PeakInfo | null>(null);
+  const [showUserBinding, setShowUserBinding] = useState(false);
+  const [showOrgHistory, setShowOrgHistory] = useState(false);
+
+  // 角色维护（CRUD）：标识仅创建时可填，展示名/宗门展示名可编辑
+  const [roleDraft, setRoleDraft] = useState({
+    name: "",
+    displayName: "",
+    fantasyDisplayName: "",
+    description: "",
+  });
+  const [roleSaving, setRoleSaving] = useState(false);
+
+  useEffect(() => {
+    if (!selectedRole) return;
+    // 选中角色变化时把表单回填为该角色（与 useSectAffairs 的既有写法一致）
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRoleDraft({
+      name: selectedRole.name,
+      displayName: selectedRole.baseDisplayName || selectedRole.displayName,
+      fantasyDisplayName: selectedRole.fantasyDisplayName || "",
+      description: selectedRole.description || "",
+    });
+  }, [selectedRole]);
+
+  /** 重新拉取角色与权限（角色 CRUD 后保持选中项） */
+  const reloadRoles = async (selectId?: string) => {
+    const [rolesData, permissionsData] = await Promise.all([
+      rbacApi.getAllRoles(),
+      rbacApi.getAllPermissions(),
+    ]);
+    setRoles(rolesData);
+    setAllPermissions(permissionsData);
+    const perms: Record<string, string[]> = {};
+    for (const role of rolesData) {
+      const rolePerms = await rbacApi.getRolePermissions(role.id);
+      perms[role.id] = rolePerms.map((p) => p.id);
+    }
+    setRolePermissions(perms);
+    setSelectedRole((prev) => {
+      const target = selectId ?? prev?.id;
+      return rolesData.find((role) => role.id === target) ?? rolesData[0] ?? null;
+    });
+  };
+
+  const handleCreateRole = async () => {
+    if (!canManage) return;
+    const name = roleDraft.name.trim();
+    if (!/^[a-z][a-z0-9_]*$/.test(name)) {
+      alert("角色标识需以小写字母开头，仅含小写字母、数字、下划线");
+      return;
+    }
+    if (!roleDraft.displayName.trim()) {
+      alert("请填写角色展示名");
+      return;
+    }
+    setRoleSaving(true);
+    setError("");
+    try {
+      const created = await rbacApi.createRole({
+        name,
+        displayName: roleDraft.displayName.trim(),
+        fantasyDisplayName: roleDraft.fantasyDisplayName.trim(),
+        description: roleDraft.description.trim(),
+      });
+      await reloadRoles(created.id);
+      alert("角色创建成功");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "创建角色失败");
+    } finally {
+      setRoleSaving(false);
+    }
+  };
+
+  const handleUpdateRole = async () => {
+    if (!canManage || !selectedRole) return;
+    if (!roleDraft.displayName.trim()) {
+      alert("请填写角色展示名");
+      return;
+    }
+    setRoleSaving(true);
+    setError("");
+    try {
+      await rbacApi.updateRole(selectedRole.id, {
+        displayName: roleDraft.displayName.trim(),
+        fantasyDisplayName: roleDraft.fantasyDisplayName.trim(),
+        description: roleDraft.description.trim(),
+      });
+      await reloadRoles(selectedRole.id);
+      alert("角色资料已更新");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "更新角色失败");
+    } finally {
+      setRoleSaving(false);
+    }
+  };
+
+  const handleDeleteRole = async () => {
+    if (!canManage || !selectedRole) return;
+    if (selectedRole.isSystem || selectedRole.isProtected) {
+      alert("系统内置/保护角色不可删除");
+      return;
+    }
+    if (!confirm(`确认删除角色「${selectedRole.displayName}」？此操作不可恢复。`)) return;
+    setRoleSaving(true);
+    setError("");
+    try {
+      await rbacApi.deleteRole(selectedRole.id);
+      await reloadRoles();
+      alert("角色已删除");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "删除角色失败");
+    } finally {
+      setRoleSaving(false);
+    }
+  };
 
   /** 加载山峰列表 */
   const loadPeaks = async () => {
@@ -86,7 +203,11 @@ export default function RolePermissionModal({
         setPeaks(peakData || []);
       } catch (err) {
         console.error("加载权限数据失败:", err);
-        setError("加载权限数据失败，请稍后重试");
+        setError(
+          err instanceof Error && err.message
+            ? `加载权限数据失败：${err.message}`
+            : "加载权限数据失败，请稍后重试"
+        );
       } finally {
         setLoading(false);
       }
@@ -135,6 +256,7 @@ export default function RolePermissionModal({
   if (!isOpen) return null;
 
   return (
+    <>
     <Modal isOpen={isOpen} onClose={onClose} title="角色权力调整" size="lg">
       {loading ? (
         <div className="text-center py-8 text-gray-500">加载中...</div>
@@ -171,7 +293,26 @@ export default function RolePermissionModal({
         <div className="text-center py-8 text-gray-500">暂无角色数据</div>
       ) : (
         <div className="flex gap-4 h-[500px]">
-          <div className="w-48 flex-shrink-0">
+          <div className="w-48 flex-shrink-0 overflow-y-auto pr-1">
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowUserBinding(true)}
+                className="w-full mb-3 px-3 py-2 rounded-lg text-sm text-white transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #0D9488 0%, #14B8A6 100%)" }}
+              >
+                用户授权
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowOrgHistory(true)}
+                className="w-full mb-3 px-3 py-2 rounded-lg text-sm border border-teal-600 text-teal-700 hover:bg-teal-50 transition-all"
+              >
+                组织历史
+              </button>
+            )}
             <h4 className="text-sm font-semibold text-gray-700 mb-2">角色列表</h4>
             <div className="space-y-1 max-h-[280px] overflow-y-auto">
               {roles.map((role) => (
@@ -195,6 +336,77 @@ export default function RolePermissionModal({
                 </button>
               ))}
             </div>
+
+            {/* 角色维护入口（仅管理员/宗主可见）：创建 / 改名 / 删除 */}
+            {canManage && (
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-700">角色维护</h4>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRoleDraft({ name: "", displayName: "", fantasyDisplayName: "", description: "" })
+                    }
+                    className="text-xs px-2 py-1 rounded-lg border border-teal-600 text-teal-700 hover:bg-teal-50 transition-all"
+                  >
+                    新建角色
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  <input
+                    value={roleDraft.name}
+                    onChange={(e) => setRoleDraft((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="角色标识（小写英文）"
+                    className="w-full text-xs px-2 py-1.5 rounded-lg border border-gray-300 bg-white focus:border-teal-500 focus:outline-none"
+                  />
+                  <input
+                    value={roleDraft.displayName}
+                    onChange={(e) => setRoleDraft((prev) => ({ ...prev, displayName: e.target.value }))}
+                    placeholder="展示名"
+                    className="w-full text-xs px-2 py-1.5 rounded-lg border border-gray-300 bg-white focus:border-teal-500 focus:outline-none"
+                  />
+                  <input
+                    value={roleDraft.fantasyDisplayName}
+                    onChange={(e) => setRoleDraft((prev) => ({ ...prev, fantasyDisplayName: e.target.value }))}
+                    placeholder="宗门展示名（可选）"
+                    className="w-full text-xs px-2 py-1.5 rounded-lg border border-gray-300 bg-white focus:border-teal-500 focus:outline-none"
+                  />
+                  <input
+                    value={roleDraft.description}
+                    onChange={(e) => setRoleDraft((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="描述（可选）"
+                    className="w-full text-xs px-2 py-1.5 rounded-lg border border-gray-300 bg-white focus:border-teal-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={handleCreateRole}
+                    disabled={roleSaving}
+                    className="flex-1 text-xs px-2 py-1.5 rounded-lg text-white font-medium transition-all disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #0D9488 0%, #14B8A6 100%)" }}
+                  >
+                    新建
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUpdateRole}
+                    disabled={roleSaving || !selectedRole}
+                    className="flex-1 text-xs px-2 py-1.5 rounded-lg border border-teal-600 text-teal-700 font-medium transition-all disabled:opacity-50"
+                  >
+                    保存
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDeleteRole}
+                  disabled={roleSaving || !selectedRole || !!selectedRole.isSystem || !!selectedRole.isProtected}
+                  className="w-full mt-1.5 text-xs px-2 py-1.5 rounded-lg text-red-600 border border-red-200 font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  删除角色
+                </button>
+              </div>
+            )}
 
             {/* 删除山峰入口（仅管理员/宗主可见） */}
             {canManage && (
@@ -354,5 +566,18 @@ export default function RolePermissionModal({
         }}
       />
     </Modal>
+    {canManage && (
+      <UserBindingModal
+        isOpen={showUserBinding}
+        onClose={() => setShowUserBinding(false)}
+      />
+    )}
+    {canManage && (
+      <OrgHistoryModal
+        isOpen={showOrgHistory}
+        onClose={() => setShowOrgHistory(false)}
+      />
+    )}
+    </>
   );
 }

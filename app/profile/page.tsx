@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { usePermission } from "@/contexts/PermissionContext";
 import { useNavTransition } from "@/hooks/useNavTransition";
+import WalletTransferModal from "./components/WalletTransferModal";
 import { taskApi, rbacApi } from "@/app/api/client";
 import { Task } from "@/types/task";
 import { BackendUser } from "@/types/user";
@@ -80,6 +81,7 @@ export default function Profile() {
   const [journeyLoading, setJourneyLoading] = useState(false);
   const [publishedLoading, setPublishedLoading] = useState(false);
   const [lingshi, setLingshi] = useState<number>(0);
+  const [showWalletTransfer, setShowWalletTransfer] = useState(false);
   // 峰列表缓存（用于将 peakIds 映射为峰名称，与 Navbar 保持一致的全局数据源）
   const [peaks, setPeaks] = useState<Peak[]>([]);
 
@@ -290,13 +292,19 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* 右侧：灵石数量（正方形） */}
-            <div className="flex-shrink-0 w-28 h-28 bg-amber-50 border-2 border-amber-200 flex flex-col items-center justify-center">
+            {/* 右侧：灵石数量（正方形）——点击打开转账 / 流水 */}
+            <button
+              type="button"
+              onClick={() => setShowWalletTransfer(true)}
+              title="灵石转账与流水"
+              className="flex-shrink-0 w-28 h-28 bg-amber-50 border-2 border-amber-200 flex flex-col items-center justify-center transition-all hover:border-amber-400 hover:shadow-md"
+            >
               <span className="text-2xl">💎</span>
               <span className="text-2xl font-bold text-amber-700">
                 {lingshi}
               </span>
-            </div>
+              <span className="text-[10px] text-amber-600 mt-0.5">转账 · 流水</span>
+            </button>
           </div>
         </div>
 
@@ -436,6 +444,14 @@ export default function Profile() {
           )}
         </div>
       </div>
+
+      <WalletTransferModal
+        isOpen={showWalletTransfer}
+        onClose={() => setShowWalletTransfer(false)}
+        onSuccess={() => {
+          void refreshPermissions();
+        }}
+      />
     </div>
   );
 }

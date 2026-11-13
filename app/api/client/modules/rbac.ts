@@ -2,150 +2,194 @@
 
 /**
  * RBAC（角色权限管理）API 模块
- * 
- * 提供角色、权限、峰（组织）相关的管理接口，支持权限查询和用户角色配置。
+ *
+ * 读：/api/admin/roles、/api/admin/permissions（同源 BFF → FastAPI /admin/*）
+ * 写：/api/admin/roles/{id}/permissions（整组替换，权限名为 resource:action）
+ *
  */
 
-import { UserInfoResponse } from "@/types/user";
 import { Role, Peak, Permission } from "@/types/rbac";
-import { request } from "../core/request";
+import { nativeRequest } from "../core/native";
+
+interface AdminRoleRow {
+  id: number;
+  name: string;
+  displayName?: string | null;
+  fantasyDisplayName?: string | null;
+  description?: string | null;
+  isSystem?: boolean;
+  isProtected?: boolean;
+  sortOrder?: number;
+  permissions?: string[];
+  userCount?: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+/** 创建/更新角色入参（name 仅创建时提交）。 */
+export interface RoleInput {
+  name?: string;
+  displayName: string;
+  fantasyDisplayName?: string;
+  description?: string;
+}
+
+interface AdminPermissionRow {
+  id: number;
+  name: string;
+  resource: string;
+  action: string;
+  description?: string | null;
+}
+
+export interface UserBinding {
+  roleId: number;
+  scopeType: "own" | "peak" | "all";
+  scopePeakId?: number | null;
+}
+
+export interface UserBindingsResult {
+  userId: number;
+  authorizationVersion: number;
+  bindings: Array<UserBinding & { id?: number; roleName?: string; displayName?: string }>;
+}
+
+function toRole(row: AdminRoleRow): Role {
+  return {
+    id: String(row.id),
+    name: row.name,
+    displayName: row.fantasyDisplayName || row.displayName || row.name,
+    baseDisplayName: row.displayName ?? row.name,
+    fantasyDisplayName: row.fantasyDisplayName ?? undefined,
+    description: row.description ?? undefined,
+    level: Number(row.sortOrder ?? 0),
+    isSystem: row.isSystem ? 1 : 0,
+    isProtected: row.isProtected ?? false,
+    userCount: row.userCount ?? 0,
+    createTime: row.createdAt ?? undefined,
+    updateTime: row.updatedAt ?? undefined,
+  };
+}
+
+function toPermission(row: AdminPermissionRow): Permission {
+  return {
+    id: row.name,
+    name: row.name,
+    displayName: row.description || row.name,
+    module: row.resource,
+    description: row.description ?? undefined,
+  };
+}
+
+async function listRoleRows(): Promise<AdminRoleRow[]> {
+  const body = await nativeRequest<AdminRoleRow[]>("/api/admin/roles");
+  return Array.isArray(body) ? body : [];
+}
+
+async function listPermissionRows(): Promise<AdminPermissionRow[]> {
+  const body = await nativeRequest<AdminPermissionRow[]>("/api/admin/permissions");
+  return Array.isArray(body) ? body : [];
+}
 
 export const rbacApi = {
-  /**
-   * 获取当前用户权限信息（需认证）
-   * 
-   * @returns 用户权限信息
-   * @throws Error - 用户未登录时抛出
-   * 
-   * 使用场景：权限系统初始化或刷新时获取当前用户的完整权限数据。
-   */
-  getMyPermissions: () => request<UserInfoResponse>("/rbac/my-permissions", undefined, true),
-
-  /**
-   * 获取所有角色列表（需认证）
-   * 
-   * @returns 角色列表
-   * @throws Error - 用户未登录或无权限时抛出
-   * 
-   * 使用场景：管理后台角色选择器或角色管理页面展示所有可用角色。
-   */
-  getAllRoles: () => request<Role[]>("/rbac/roles", undefined, true),
-
-  /**
-   * 获取所有峰（组织）列表（需认证）
-   * 
-   * @returns 峰列表
-   * @throws Error - 用户未登录或无权限时抛出
-   * 
-   * 使用场景：组织管理页面展示所有峰信息，或弟子分配时选择目标峰。
-   */
-  getAllPeaks: () => request<Peak[]>("/rbac/peaks", undefined, true),
-
-  /**
-   * 添加新峰（需认证）
-   * 
-   * @param name - 峰名称
-   * @param description - 峰描述
-   * @returns 创建的峰对象
-   * @throws Error - 用户未登录、无权限或参数错误时抛出
-   * 
-   * 使用场景：宗门事务页面创建新峰。
-   */
-  addPeak: (name: string, description?: string) =>
-    request<Peak>("/rbac/peaks", {
-      method: "POST",
-      body: JSON.stringify({ name, description }),
-    }, true),
-
-  /**
-   * 删除峰（需认证）
-   * 
-   * @param id - 峰 ID
-   * @returns true 表示删除成功
-   * @throws Error - 用户未登录、无权限、峰不存在或峰下有弟子时抛出
-   * 
-   * 使用场景：宗门事务页面删除空峰。
-   */
-  deletePeak: (id: string) =>
-    request<boolean>(`/rbac/peaks/${id}`, { method: "DELETE" }, true),
-
-  /**
-   * 获取指定用户的角色（需认证）
-   * 
-   * @param userId - 用户 ID
-   * @returns 用户的角色列表
-   * @throws Error - 用户未登录或无权限时抛出
-   * 
-   * 使用场景：查看特定用户的角色配置。
-   */
-  getUserRoles: (userId: string) => request<Role[]>(`/rbac/user/${userId}/roles`, undefined, true),
-
-  /**
-   * 更新用户角色（需认证）
-   * 
-   * @param userId - 用户 ID
-   * @param roleIds - 角色 ID 列表
-   * @param peakId - 峰 ID（可选）
-   * @returns void
-   * @throws Error - 用户未登录、无权限或参数错误时抛出
-   * 
-   * 使用场景：管理员在用户管理页面调整用户角色分配。
-   * 业务逻辑：通过 URL 查询参数传递角色 ID 列表和峰 ID。
-   */
-  updateUserRoles: (userId: string, roleIds: string[], peakId?: string) => {
-    const params = new URLSearchParams();
-    roleIds.forEach((id) => params.append("roleIds", id));
-    if (peakId) params.set("peakId", peakId);
-    return request<void>(`/rbac/user/${userId}/roles?${params.toString()}`, { method: "PUT" }, true);
+  /** 角色列表（含每个角色的权限名） */
+  getAllRoles: async (): Promise<Role[]> => {
+    const rows = await listRoleRows();
+    return rows.map(toRole);
   },
 
-  /**
-   * 获取用户细粒度权限列表（需认证）
-   * 
-   * @param userId - 用户 ID
-   * @returns 用户的权限列表
-   * @throws Error - 用户未登录或无权限时抛出
-   * 
-   * 使用场景：查看特定用户拥有的所有细粒度权限。
-   */
-  getUserPermissions: (userId: string) =>
-    request<Permission[]>(`/rbac/user/${userId}/permissions`, undefined, true),
+  /** 权限点列表（name = resource:action） */
+  getAllPermissions: async (): Promise<Permission[]> => {
+    const rows = await listPermissionRows();
+    return rows.map(toPermission);
+  },
 
-  /**
-   * 获取所有权限列表（需认证）
-   * 
-   * @returns 权限列表
-   * @throws Error - 用户未登录或无权限时抛出
-   * 
-   * 使用场景：角色权限管理页面展示所有可用权限。
-   */
-  getAllPermissions: () => request<Permission[]>("/rbac/permissions", undefined, true),
+  /** 角色权限：从角色行读取权限名并映射为权限点 */
+  getRolePermissions: async (roleId: string): Promise<Permission[]> => {
+    const [roles, permissions] = await Promise.all([listRoleRows(), listPermissionRows()]);
+    const names = roles.find((role) => String(role.id) === roleId)?.permissions ?? [];
+    const byName = new Map(permissions.map((item) => [item.name, item]));
+    return names.map((name) => {
+      const row = byName.get(name);
+      if (row) return toPermission(row);
+      const [resource, action = ""] = name.split(":");
+      return {
+        id: name,
+        name,
+        displayName: name,
+        module: resource,
+        description: action,
+      };
+    });
+  },
 
-  /**
-   * 获取角色权限（需认证）
-   * 
-   * @param roleId - 角色 ID
-   * @returns 角色的权限列表
-   * @throws Error - 用户未登录或无权限时抛出
-   * 
-   * 使用场景：角色权限管理页面展示指定角色的权限配置。
-   */
-  getRolePermissions: (roleId: string) =>
-    request<Permission[]>(`/rbac/roles/${roleId}/permissions`, undefined, true),
-
-  /**
-   * 更新角色权限（需认证）
-   * 
-   * @param roleId - 角色 ID
-   * @param permissionIds - 权限 ID 列表
-   * @returns void
-   * @throws Error - 用户未登录、无权限或参数错误时抛出
-   * 
-   * 使用场景：角色权限管理页面更新角色的权限配置。
-   */
-  updateRolePermissions: (roleId: string, permissionIds: string[]) =>
-    request<void>(`/rbac/roles/${roleId}/permissions`, {
+  /** 整组替换角色权限（提交权限名列表） */
+  updateRolePermissions: async (roleId: string, permissionIds: string[]): Promise<void> => {
+    await nativeRequest(`/api/admin/roles/${roleId}/permissions`, {
       method: "PUT",
-      body: JSON.stringify(permissionIds),
-    }, true),
+      body: JSON.stringify({ permissions: permissionIds }),
+    });
+  },
+
+  /** 创建自定义角色（key + 双展示名 + 描述） */
+  createRole: async (input: RoleInput): Promise<Role> => {
+    const row = await nativeRequest<AdminRoleRow>("/api/admin/roles", {
+      method: "POST",
+      body: JSON.stringify({
+        name: input.name,
+        display_name: input.displayName,
+        fantasy_display_name: input.fantasyDisplayName || null,
+        description: input.description || null,
+        permissions: [],
+      }),
+    });
+    return toRole(row);
+  },
+
+  /** 更新角色展示名/描述（不改 key） */
+  updateRole: async (roleId: string, input: Omit<RoleInput, "name">): Promise<Role> => {
+    const row = await nativeRequest<AdminRoleRow>(`/api/admin/roles/${roleId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        display_name: input.displayName,
+        fantasy_display_name: input.fantasyDisplayName || null,
+        description: input.description || null,
+      }),
+    });
+    return toRole(row);
+  },
+
+  /** 删除角色（系统/保护角色由后端拒绝） */
+  deleteRole: async (roleId: string): Promise<void> => {
+    await nativeRequest(`/api/admin/roles/${roleId}`, { method: "DELETE" });
+  },
+
+  /** 读取用户角色绑定与授权版本 */
+  getUserBindings: async (userId: number): Promise<UserBindingsResult> => {
+    return nativeRequest<UserBindingsResult>(`/api/admin/users/${userId}/role-bindings`);
+  },
+
+  /** 整组替换用户角色绑定（If-Match 由 BFF 携带） */
+  updateUserBindings: async (
+    userId: number,
+    version: number,
+    bindings: UserBinding[],
+  ): Promise<UserBindingsResult> => {
+    return nativeRequest<UserBindingsResult>(`/api/admin/users/${userId}/role-bindings`, {
+      method: "PUT",
+      body: JSON.stringify({ version, bindings }),
+    });
+  },
+
+  /** 峰列表（组织口径，供个人中心与权限弹窗复用） */
+  getAllPeaks: async (): Promise<Peak[]> => {
+    const body = await nativeRequest<{ items?: Array<Record<string, unknown>> }>(
+      "/api/organization/peaks?limit=100",
+    );
+    return (body.items ?? []).map((row) => ({
+      id: String(row.id ?? ""),
+      name: String(row.fantasyName ?? row.fantasy_name ?? row.name ?? ""),
+      description: (row.description as string | undefined) ?? undefined,
+    }));
+  },
 };
